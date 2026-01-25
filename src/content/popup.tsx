@@ -366,10 +366,15 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
     );
 };
 
+// Interface for shadow host with cleanup handler
+interface ShadowHostWithCleanup extends HTMLDivElement {
+    _cleanup?: () => void;
+}
+
 // Global state for popup management
 let iconRoot: Root | null = null;
 let iconWrapper: HTMLDivElement | null = null;
-let shadowHost: HTMLDivElement | null = null;
+let shadowHost: ShadowHostWithCleanup | null = null;
 
 /**
  * Position the icon inside the input field.
@@ -440,7 +445,7 @@ export const showPopup = (
     window.addEventListener("resize", handleReposition);
 
     // Store cleanup handlers
-    (shadowHost as any)._cleanup = () => {
+    shadowHost._cleanup = () => {
         window.removeEventListener("scroll", handleReposition, true);
         window.removeEventListener("resize", handleReposition);
     };
@@ -452,8 +457,8 @@ export const showPopup = (
 export const hidePopup = (): void => {
     if (shadowHost) {
         // Run cleanup handlers
-        if ((shadowHost as any)._cleanup) {
-            (shadowHost as any)._cleanup();
+        if (shadowHost._cleanup) {
+            shadowHost._cleanup();
         }
     }
     if (iconRoot) {

@@ -181,44 +181,83 @@ const showSuccessBanner = (email: string) => {
 
     const banner = document.createElement("div");
     banner.id = "ente-extension-banner";
-    banner.innerHTML = `
-        <div style="
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            background: linear-gradient(135deg, #10B981 0%, #059669 100%);
-            color: white;
-            padding: 16px 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            font-size: 14px;
-            z-index: 999999;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-        ">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="flex-shrink: 0;">
-                <path d="M9 12l2 2 4-4" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <circle cx="12" cy="12" r="10" stroke="white" stroke-width="2"/>
-            </svg>
-            <span>
-                <strong>Ente Auth Extension:</strong>
-                Logged in as ${email}. You can close this tab and return to the extension.
-            </span>
-            <button onclick="this.parentElement.parentElement.remove()" style="
-                background: rgba(255,255,255,0.2);
-                border: none;
-                color: white;
-                padding: 4px 12px;
-                border-radius: 4px;
-                cursor: pointer;
-                font-size: 13px;
-                margin-left: 8px;
-            ">Dismiss</button>
-        </div>
+
+    const container = document.createElement("div");
+    container.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+        color: white;
+        padding: 16px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 14px;
+        z-index: 999999;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
     `;
+
+    // Create SVG icon
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("width", "20");
+    svg.setAttribute("height", "20");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("fill", "none");
+    svg.style.flexShrink = "0";
+
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", "M9 12l2 2 4-4");
+    path.setAttribute("stroke", "white");
+    path.setAttribute("stroke-width", "2");
+    path.setAttribute("stroke-linecap", "round");
+    path.setAttribute("stroke-linejoin", "round");
+
+    const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    circle.setAttribute("cx", "12");
+    circle.setAttribute("cy", "12");
+    circle.setAttribute("r", "10");
+    circle.setAttribute("stroke", "white");
+    circle.setAttribute("stroke-width", "2");
+
+    svg.appendChild(path);
+    svg.appendChild(circle);
+
+    // Create message span
+    const messageSpan = document.createElement("span");
+    const strongText = document.createElement("strong");
+    strongText.textContent = "Ente Auth Extension:";
+    messageSpan.appendChild(strongText);
+    messageSpan.appendChild(document.createTextNode(" Logged in as "));
+
+    const emailSpan = document.createElement("span");
+    emailSpan.textContent = email;
+    messageSpan.appendChild(emailSpan);
+
+    messageSpan.appendChild(document.createTextNode(". You can close this tab and return to the extension."));
+
+    // Create dismiss button
+    const dismissButton = document.createElement("button");
+    dismissButton.textContent = "Dismiss";
+    dismissButton.style.cssText = `
+        background: rgba(255,255,255,0.2);
+        border: none;
+        color: white;
+        padding: 4px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+        margin-left: 8px;
+    `;
+    dismissButton.addEventListener("click", () => banner.remove());
+
+    container.appendChild(svg);
+    container.appendChild(messageSpan);
+    container.appendChild(dismissButton);
+    banner.appendChild(container);
     document.body.prepend(banner);
 };
 
@@ -260,27 +299,20 @@ const monitorForLogin = () => {
     // Initialize lastSeenEncryptionKey with current value (if any) to detect changes
     lastSeenEncryptionKey = sessionStorage.getItem("encryptionKey");
 
-    // Monitor for storage changes (login completion)
-    const checkInterval = setInterval(async () => {
-        if (credentialsSent) {
-            clearInterval(checkInterval);
-            return;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    // Cleanup function to remove all listeners and timers
+    const cleanup = (intervalId: ReturnType<typeof setInterval>) => {
+        clearInterval(intervalId);
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
         }
+        window.removeEventListener("storage", handleStorageChange);
+    };
 
-        const credentials = await captureCredentials();
-        if (credentials) {
-            const success = await sendCredentialsToExtension(credentials);
-            if (success) {
-                clearInterval(checkInterval);
-            }
-        }
-    }, 1000);
-
-    // Stop checking after 10 minutes
-    setTimeout(() => clearInterval(checkInterval), 10 * 60 * 1000);
-
-    // Also listen for storage events (works for changes from other tabs/frames)
-    window.addEventListener("storage", async (event) => {
+    // Storage change handler (defined separately so it can be removed)
+    const handleStorageChange = async (event: StorageEvent) => {
         if (credentialsSent) return;
 
         if (event.key === "user" || event.key === "encryptionKey") {
@@ -289,7 +321,29 @@ const monitorForLogin = () => {
                 await sendCredentialsToExtension(credentials);
             }
         }
-    });
+    };
+
+    // Monitor for storage changes (login completion)
+    const checkInterval = setInterval(async () => {
+        if (credentialsSent) {
+            cleanup(checkInterval);
+            return;
+        }
+
+        const credentials = await captureCredentials();
+        if (credentials) {
+            const success = await sendCredentialsToExtension(credentials);
+            if (success) {
+                cleanup(checkInterval);
+            }
+        }
+    }, 1000);
+
+    // Stop checking after 10 minutes
+    timeoutId = setTimeout(() => cleanup(checkInterval), 10 * 60 * 1000);
+
+    // Also listen for storage events (works for changes from other tabs/frames)
+    window.addEventListener("storage", handleStorageChange);
 };
 
 // Start monitoring when the script loads

@@ -52,12 +52,46 @@ const init = async () => {
 };
 
 /**
+ * Validate that a message sender is from a trusted extension context.
+ */
+const isValidSender = (sender: Browser.Runtime.MessageSender): boolean => {
+    // Allow messages from extension pages (popup, options, background)
+    if (sender.id === browser.runtime.id) {
+        // Extension's own pages are always trusted
+        if (sender.url?.startsWith(`chrome-extension://${browser.runtime.id}/`) ||
+            sender.url?.startsWith(`moz-extension://${browser.runtime.id}/`)) {
+            return true;
+        }
+        // Content scripts on allowed domains
+        if (sender.url) {
+            const url = new URL(sender.url);
+            const allowedDomains = ["auth.ente.io", "web.ente.io"];
+            if (allowedDomains.includes(url.hostname)) {
+                return true;
+            }
+        }
+        // Messages from content scripts on other domains (for autofill)
+        // These are still from our extension, just injected into pages
+        if (sender.tab?.id !== undefined) {
+            return true;
+        }
+    }
+    return false;
+};
+
+/**
  * Handle incoming messages.
  */
 const handleMessage = async (
     message: ExtensionMessage,
-    _sender: Browser.Runtime.MessageSender
+    sender: Browser.Runtime.MessageSender
 ): Promise<ExtensionResponse> => {
+    // Validate sender before processing any message
+    if (!isValidSender(sender)) {
+        console.warn("Rejected message from untrusted sender:", sender.url);
+        return { success: false, error: "Unauthorized" };
+    }
+
     switch (message.type) {
         case "GET_AUTH_STATE": {
             const state = await getAuthState();
@@ -106,9 +140,6 @@ const handleMessage = async (
         case "WEB_LOGIN_CREDENTIALS": {
             try {
                 const credentials = message.credentials as WebLoginCredentials;
-                console.log("Received web login credentials for:", credentials.email);
-                console.log("Has masterKey:", !!credentials.masterKey);
-                console.log("Has password:", !!credentials.password);
 
                 // Store credentials
                 await login(credentials.token, credentials.keyAttributes, credentials.email);
@@ -118,7 +149,6 @@ const handleMessage = async (
 
                 // Only try password derivation if we don't have masterKey
                 if (!masterKey && credentials.password) {
-                    console.log("Deriving master key from password...");
                     // Derive KEK from password
                     const kek = await deriveKey(
                         credentials.password,
@@ -148,7 +178,6 @@ const handleMessage = async (
                     }
                     return { success: true };
                 } else {
-                    console.log("No master key available, user will need to unlock");
                     return { success: false, error: "No master key - please unlock manually" };
                 }
             } catch (e) {
@@ -164,8 +193,10 @@ const handleMessage = async (
             try {
                 const success = await unlock(message.password);
                 if (success) {
-                    // Sync codes after unlocking
-                    await syncCodes();
+                    // Sync codes after unlocking (don't block on sync failure)
+                    syncCodes().catch((syncError) => {
+                        console.error("Failed to sync after unlock:", syncError);
+                    });
                     return { success: true };
                 }
                 return { success: false, error: "Invalid password" };
@@ -225,10 +256,23 @@ const handleMessage = async (
         case "FILL_CODE": {
             // Send the code to the content script in the specified tab
             if (message.tabId) {
-                await browser.tabs.sendMessage(message.tabId, {
-                    type: "FILL_OTP",
-                    code: message.code,
-                });
+                try {
+                    // Verify tab exists before sending message
+                    const tab = await browser.tabs.get(message.tabId);
+                    if (!tab) {
+                        return { success: false, error: "Tab no longer exists" };
+                    }
+                    await browser.tabs.sendMessage(message.tabId, {
+                        type: "FILL_OTP",
+                        code: message.code,
+                    });
+                } catch (e) {
+                    // Tab may have been closed or navigated away
+                    return {
+                        success: false,
+                        error: e instanceof Error ? e.message : "Failed to fill code",
+                    };
+                }
             }
             return { success: true };
         }

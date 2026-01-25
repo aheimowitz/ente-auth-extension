@@ -91,8 +91,18 @@ const checkForMFAFields = async (): Promise<void> => {
         }, currentDetection.element);
         hasShownPopup = true;
     } catch (error) {
-        // Only log unexpected errors, not connection issues
-        console.error("[Ente Auth] Unexpected error", error);
+        // Categorize errors for appropriate handling
+        const errorMessage = error instanceof Error ? error.message : String(error);
+
+        // Silently ignore connection errors (extension not ready, service worker sleeping)
+        if (errorMessage.includes("Could not establish connection") ||
+            errorMessage.includes("Receiving end does not exist") ||
+            errorMessage.includes("Extension context invalidated")) {
+            return;
+        }
+
+        // Log actual unexpected errors
+        console.error("[Ente Auth] Error checking for MFA fields:", error);
     }
 };
 
