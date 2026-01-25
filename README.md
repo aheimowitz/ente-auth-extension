@@ -15,43 +15,46 @@ A browser extension for Ente Auth that provides secure 2FA code autofill.
 
 ## Installation
 
+### From Release (Recommended)
+
+1. Download the latest release for your browser from the [Releases page](../../releases):
+   - **Chrome**: `ente-auth-chrome-x.x.x.zip`
+   - **Firefox**: `ente-auth-firefox-x.x.x.zip`
+2. Extract the zip file
+3. Load the extension:
+
+   **Chrome:**
+   1. Open `chrome://extensions`
+   2. Enable "Developer mode" (toggle in top right)
+   3. Click "Load unpacked"
+   4. Select the extracted folder
+
+   **Firefox:**
+   1. Open `about:debugging#/runtime/this-firefox`
+   2. Click "Load Temporary Add-on"
+   3. Select the `manifest.json` file in the extracted folder
+
+> **Note**: Firefox temporary add-ons are removed when you close the browser. For
+> persistent installation, you can use
+> [web-ext](https://extensionworkshop.com/documentation/develop/getting-started-with-web-ext/).
+
 ### From Source
 
 1. Clone this repository
 2. Install dependencies:
    ```sh
    npm install
-   # or
-   yarn install
    ```
 3. Build the extension:
    ```sh
    # Build for both browsers (outputs to dist-chrome/ and dist-firefox/)
    npm run build
-   # or
-   yarn build
 
    # Build for a specific browser
    npm run build:chrome
    npm run build:firefox
    ```
-
-### Loading in Chrome
-
-1. Open `chrome://extensions`
-2. Enable "Developer mode" (toggle in top right)
-3. Click "Load unpacked"
-4. Select the `dist-chrome` directory
-
-### Loading in Firefox
-
-1. Open `about:debugging#/runtime/this-firefox`
-2. Click "Load Temporary Add-on"
-3. Select the `manifest.json` file in `dist-firefox`
-
-> **Note**: Firefox temporary add-ons are removed when you close the browser. For
-> persistent installation during development, you can use
-> [web-ext](https://extensionworkshop.com/documentation/develop/getting-started-with-web-ext/).
+4. Load the extension using the steps above, selecting the `dist-chrome` or `dist-firefox` directory
 
 ## Development
 
@@ -100,6 +103,14 @@ When you visit a website with an MFA input field:
 
 The extension matches codes to websites using the issuer name and any domain
 hints stored in your 2FA entries.
+
+## Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## Contact
+
+Have questions, feedback, or want to get involved? Reach out to **iPcGuy** on the [Ente Discord server](https://discord.gg/z2YVKkycX3).
 
 ## License
 
