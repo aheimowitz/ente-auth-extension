@@ -7,18 +7,16 @@ import type { AuthenticatorEntityKey, Code } from "./types";
 import { codeFromURIString } from "./code";
 import { decryptBox, decryptMetadataJSON } from "./crypto";
 
-const DEFAULT_API_URL = "https://api.ente.io";
+const API_URL = "https://api.ente.io";
 
 /**
  * Build the API URL with optional query parameters.
  */
 export const buildApiUrl = (
     path: string,
-    params?: Record<string, string | number>,
-    customEndpoint?: string
+    params?: Record<string, string | number>
 ): string => {
-    const baseUrl = customEndpoint || DEFAULT_API_URL;
-    const url = new URL(path, baseUrl);
+    const url = new URL(path, API_URL);
     if (params) {
         Object.entries(params).forEach(([key, value]) => {
             url.searchParams.set(key, String(value));
@@ -86,10 +84,9 @@ const AuthenticatorEntityDiffResponse = z.object({
  * Fetch the authenticator entity key from remote.
  */
 export const getAuthenticatorEntityKey = async (
-    token: string,
-    customEndpoint?: string
+    token: string
 ): Promise<AuthenticatorEntityKey | undefined> => {
-    const url = buildApiUrl("/authenticator/key", undefined, customEndpoint);
+    const url = buildApiUrl("/authenticator/key");
 
     try {
         const response = await authenticatedFetch(url, token);
@@ -128,8 +125,7 @@ interface AuthenticatorEntity {
  */
 const fetchAuthenticatorEntities = async (
     token: string,
-    authenticatorKey: string,
-    customEndpoint?: string
+    authenticatorKey: string
 ): Promise<{ entities: AuthenticatorEntity[]; timeOffset: number | undefined }> => {
     const decrypt = (encryptedData: string, decryptionHeader: string) =>
         decryptMetadataJSON(
@@ -146,11 +142,10 @@ const fetchAuthenticatorEntities = async (
     let timeOffset: number | undefined = undefined;
 
     while (true) {
-        const url = buildApiUrl(
-            "/authenticator/entity/diff",
-            { sinceTime, limit: batchSize },
-            customEndpoint
-        );
+        const url = buildApiUrl("/authenticator/entity/diff", {
+            sinceTime,
+            limit: batchSize,
+        });
 
         const response = await authenticatedFetch(url, token);
         const { diff, timestamp } = AuthenticatorEntityDiffResponse.parse(
@@ -202,13 +197,9 @@ export interface AuthCodesResult {
  */
 export const getAuthCodes = async (
     token: string,
-    masterKey: string,
-    customEndpoint?: string
+    masterKey: string
 ): Promise<AuthCodesResult> => {
-    const authenticatorEntityKey = await getAuthenticatorEntityKey(
-        token,
-        customEndpoint
-    );
+    const authenticatorEntityKey = await getAuthenticatorEntityKey(token);
 
     if (!authenticatorEntityKey) {
         return { codes: [], timeOffset: undefined };
@@ -221,8 +212,7 @@ export const getAuthCodes = async (
 
     const { entities, timeOffset } = await fetchAuthenticatorEntities(
         token,
-        authenticatorKey,
-        customEndpoint
+        authenticatorKey
     );
 
     const codes = entities

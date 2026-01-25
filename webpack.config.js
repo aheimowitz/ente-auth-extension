@@ -40,6 +40,11 @@ module.exports = {
         extensions: [".tsx", ".ts", ".js"],
         alias: {
             "@shared": path.resolve(__dirname, "src/shared"),
+            // Force CommonJS version of libsodium (ESM build has missing files)
+            "libsodium-wrappers-sumo": path.resolve(
+                __dirname,
+                "node_modules/libsodium-wrappers-sumo/dist/modules-sumo/libsodium-wrappers.js"
+            ),
         },
         fallback: {
             fs: false,

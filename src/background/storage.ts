@@ -3,7 +3,7 @@
  * Provides a unified interface for chrome.storage.local and chrome.storage.session.
  */
 import { browser } from "@shared/browser";
-import type { Code, ExtensionSettings, KeyAttributes } from "@shared/types";
+import type { Code, CustomDomainMapping, ExtensionSettings, KeyAttributes } from "@shared/types";
 
 // Storage keys
 const KEYS = {
@@ -13,6 +13,7 @@ const KEYS = {
     SETTINGS: "settings",
     SYNC_TIMESTAMP: "syncTimestamp",
     EMAIL: "email",
+    CUSTOM_DOMAIN_MAPPINGS: "customDomainMappings",
     // Master key in local storage for MV3 reliability
     // (session storage is unreliable with service worker lifecycle)
     MASTER_KEY: "masterKey",
@@ -186,10 +187,15 @@ export const settingsStorage = {
         const stored = await localStore.get<Partial<ExtensionSettings>>(
             KEYS.SETTINGS
         );
+        // Migrate from old autofillEnabled setting if present
+        const legacyAutofill = (stored as Record<string, unknown>)?.autofillEnabled as boolean | undefined;
+        const showAutofillIcon = stored?.showAutofillIcon ?? legacyAutofill ?? true;
+        const autoFillSingleMatch = stored?.autoFillSingleMatch ?? legacyAutofill ?? true;
+
         return {
-            autofillEnabled: stored?.autofillEnabled ?? true,
+            showAutofillIcon,
+            autoFillSingleMatch,
             syncInterval: stored?.syncInterval ?? 5,
-            customApiEndpoint: stored?.customApiEndpoint,
             theme: stored?.theme ?? "system",
         };
     },
@@ -201,6 +207,45 @@ export const settingsStorage = {
 
     async clearSettings(): Promise<void> {
         await localStore.remove(KEYS.SETTINGS);
+    },
+};
+
+/**
+ * Custom domain mappings storage.
+ */
+export const customMappingsStorage = {
+    async getMappings(): Promise<CustomDomainMapping[]> {
+        const mappings = await localStore.get<CustomDomainMapping[]>(
+            KEYS.CUSTOM_DOMAIN_MAPPINGS
+        );
+        return mappings ?? [];
+    },
+
+    async addMapping(mapping: Omit<CustomDomainMapping, "createdAt">): Promise<void> {
+        const mappings = await this.getMappings();
+        // Remove existing mapping for this domain if it exists (update case)
+        const filtered = mappings.filter(
+            (m) => m.domain.toLowerCase() !== mapping.domain.toLowerCase()
+        );
+        // Add new mapping with timestamp
+        const newMapping: CustomDomainMapping = {
+            ...mapping,
+            createdAt: Date.now(),
+        };
+        filtered.push(newMapping);
+        await localStore.set(KEYS.CUSTOM_DOMAIN_MAPPINGS, filtered);
+    },
+
+    async deleteMapping(domain: string): Promise<void> {
+        const mappings = await this.getMappings();
+        const filtered = mappings.filter(
+            (m) => m.domain.toLowerCase() !== domain.toLowerCase()
+        );
+        await localStore.set(KEYS.CUSTOM_DOMAIN_MAPPINGS, filtered);
+    },
+
+    async clearMappings(): Promise<void> {
+        await localStore.remove(KEYS.CUSTOM_DOMAIN_MAPPINGS);
     },
 };
 

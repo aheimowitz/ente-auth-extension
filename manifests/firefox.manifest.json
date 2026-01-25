@@ -1,11 +1,12 @@
 {
     "manifest_version": 2,
-    "name": "Ente Auth",
-    "version": "1.0.0",
+    "name": "Ente Auth Extension",
+    "version": "0.1.0",
     "description": "Secure 2FA autofill from your Ente Auth vault",
     "permissions": [
         "storage",
         "activeTab",
+        "tabs",
         "alarms",
         "https://api.ente.io/*",
         "<all_urls>"
@@ -53,5 +54,6 @@
             "strict_min_version": "109.0"
         }
     },
-    "content_security_policy": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+    "content_security_policy": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",
+    "web_accessible_resources": ["assets/icons/*"]
 }

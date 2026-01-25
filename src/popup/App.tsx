@@ -190,7 +190,9 @@ export const App: React.FC = () => {
         setError(null);
         setLoggingIn(true);
         try {
-            await sendMessage({ type: "OPEN_WEB_LOGIN" });
+            // Open the tab directly from popup - more reliable across browsers
+            // Using window.open as a fallback-safe approach
+            window.open("https://auth.ente.io", "_blank");
             // The content script on auth.ente.io will capture credentials
             // and send them back. We'll poll for auth state changes.
             pollForLogin();
@@ -261,7 +263,7 @@ export const App: React.FC = () => {
                     <div className="auth-logo">
                         <Logo />
                     </div>
-                    <div className="auth-title">Ente Auth</div>
+                    <div className="auth-title">Ente Auth Extension</div>
                     <div className="auth-description">
                         Secure 2FA autofill from your Ente Auth vault.
                     </div>

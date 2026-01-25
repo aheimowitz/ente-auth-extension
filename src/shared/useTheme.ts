@@ -66,7 +66,12 @@ export const useTheme = (): {
                     setTheme(response.data.theme);
                 }
             } catch (e) {
-                console.error("Failed to load theme:", e);
+                // Silently ignore connection errors (service worker waking up)
+                const errorMessage = e instanceof Error ? e.message : String(e);
+                if (!errorMessage.includes("Could not establish connection") &&
+                    !errorMessage.includes("Receiving end does not exist")) {
+                    console.error("Failed to load theme:", e);
+                }
             } finally {
                 setSettingsLoaded(true);
             }

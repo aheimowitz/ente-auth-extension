@@ -57,14 +57,14 @@ const checkForMFAFields = async (): Promise<void> => {
     const domain = window.location.hostname;
 
     try {
-        // Get settings to check if autofill is enabled
+        // Get settings to check if autofill icon is enabled
         const settingsResponse = await sendMessageWithRetry<{
             success: boolean;
             data?: ExtensionSettings;
         }>({ type: "GET_SETTINGS" });
 
         const settings = settingsResponse?.data;
-        if (settings && !settings.autofillEnabled) {
+        if (settings && !settings.showAutofillIcon) {
             return;
         }
 
@@ -81,14 +81,14 @@ const checkForMFAFields = async (): Promise<void> => {
         // Show popup with matches (or empty if not logged in)
         const matches = response?.data?.matches || [];
         const timeOffset = response?.data?.timeOffset || 0;
+        const autoFillSingleMatch = settings?.autoFillSingleMatch ?? true;
 
         // Show popup with matches (or no matches message)
-        // The popup component handles auto-fill for single match
         showPopup(matches, timeOffset, (otp: string) => {
             if (currentDetection) {
                 fillCode(currentDetection, otp);
             }
-        }, currentDetection.element);
+        }, currentDetection.element, autoFillSingleMatch);
         hasShownPopup = true;
     } catch (error) {
         // Categorize errors for appropriate handling

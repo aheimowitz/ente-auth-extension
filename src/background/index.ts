@@ -4,7 +4,7 @@
  */
 import type Browser from "webextension-polyfill";
 import { browser, createAlarm, onAlarm, onMessage } from "@shared/browser";
-import { matchCodesToDomain } from "@shared/domain-matcher";
+import { matchCodesToDomain, setCustomMappings } from "@shared/domain-matcher";
 import { deriveKey, decryptBoxBytes, toB64 } from "@shared/crypto";
 import type {
     ExtensionMessage,
@@ -12,7 +12,7 @@ import type {
     WebLoginCredentials,
 } from "@shared/types";
 import { getAuthState, login, logout, unlock } from "./auth";
-import { settingsStorage, authStorage } from "./storage";
+import { settingsStorage, authStorage, customMappingsStorage } from "./storage";
 import { getCodes, getTimeOffset, syncCodes } from "./sync";
 
 const SYNC_ALARM_NAME = "ente-auth-sync";
@@ -58,16 +58,22 @@ const isValidSender = (sender: Browser.Runtime.MessageSender): boolean => {
     // Allow messages from extension pages (popup, options, background)
     if (sender.id === browser.runtime.id) {
         // Extension's own pages are always trusted
-        if (sender.url?.startsWith(`chrome-extension://${browser.runtime.id}/`) ||
-            sender.url?.startsWith(`moz-extension://${browser.runtime.id}/`)) {
+        // Note: In Firefox, sender.url uses a UUID different from browser.runtime.id,
+        // so we just check for the extension protocol prefix
+        if (sender.url?.startsWith("chrome-extension://") ||
+            sender.url?.startsWith("moz-extension://")) {
             return true;
         }
         // Content scripts on allowed domains
         if (sender.url) {
-            const url = new URL(sender.url);
-            const allowedDomains = ["auth.ente.io", "web.ente.io"];
-            if (allowedDomains.includes(url.hostname)) {
-                return true;
+            try {
+                const url = new URL(sender.url);
+                const allowedDomains = ["auth.ente.io", "web.ente.io"];
+                if (allowedDomains.includes(url.hostname)) {
+                    return true;
+                }
+            } catch {
+                // Invalid URL, fall through
             }
         }
         // Messages from content scripts on other domains (for autofill)
@@ -123,11 +129,7 @@ const handleMessage = async (
         case "OPEN_WEB_LOGIN": {
             try {
                 // Open auth.ente.io in a new tab for the user to log in
-                const settings = await settingsStorage.getSettings();
-                const baseUrl = settings.customApiEndpoint
-                    ? settings.customApiEndpoint.replace("/api", "")
-                    : "https://auth.ente.io";
-                await browser.tabs.create({ url: baseUrl });
+                await browser.tabs.create({ url: "https://auth.ente.io" });
                 return { success: true };
             } catch (e) {
                 return {
@@ -222,6 +224,9 @@ const handleMessage = async (
 
         case "GET_CODES_FOR_DOMAIN": {
             const codes = await getCodes();
+            // Load and set custom mappings before matching
+            const customMappings = await customMappingsStorage.getMappings();
+            setCustomMappings(customMappings);
             const matches = matchCodesToDomain(codes, message.domain);
             const timeOffset = await getTimeOffset();
             return { success: true, data: { matches, timeOffset } };
@@ -275,6 +280,35 @@ const handleMessage = async (
                 }
             }
             return { success: true };
+        }
+
+        case "GET_CUSTOM_MAPPINGS": {
+            const mappings = await customMappingsStorage.getMappings();
+            return { success: true, data: mappings };
+        }
+
+        case "ADD_CUSTOM_MAPPING": {
+            try {
+                await customMappingsStorage.addMapping(message.mapping);
+                return { success: true };
+            } catch (e) {
+                return {
+                    success: false,
+                    error: e instanceof Error ? e.message : "Failed to add mapping",
+                };
+            }
+        }
+
+        case "DELETE_CUSTOM_MAPPING": {
+            try {
+                await customMappingsStorage.deleteMapping(message.domain);
+                return { success: true };
+            } catch (e) {
+                return {
+                    success: false,
+                    error: e instanceof Error ? e.message : "Failed to delete mapping",
+                };
+            }
         }
 
         default:

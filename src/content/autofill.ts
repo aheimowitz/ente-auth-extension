@@ -102,49 +102,138 @@ export const clearField = (detection: MFAFieldDetection): void => {
 };
 
 /**
+ * Check if an element looks like a submit button based on text/attributes.
+ */
+const isLikelySubmitButton = (element: HTMLElement): boolean => {
+    const text = element.textContent?.toLowerCase().trim() || "";
+    const ariaLabel = element.getAttribute("aria-label")?.toLowerCase() || "";
+    const title = element.getAttribute("title")?.toLowerCase() || "";
+    const className = element.className?.toLowerCase() || "";
+    const id = element.id?.toLowerCase() || "";
+
+    // Common submit button keywords
+    const submitKeywords = [
+        "submit", "verify", "confirm", "continue", "next",
+        "sign in", "signin", "login", "log in", "authenticate",
+        "send", "done", "ok", "go", "enter"
+    ];
+
+    // Check text content, aria-label, and title
+    for (const keyword of submitKeywords) {
+        if (text.includes(keyword) || ariaLabel.includes(keyword) || title.includes(keyword)) {
+            return true;
+        }
+    }
+
+    // Check for primary/submit button classes
+    const primaryClassPatterns = [
+        "submit", "primary", "btn-primary", "cta", "action",
+        "continue", "next", "confirm"
+    ];
+    for (const pattern of primaryClassPatterns) {
+        if (className.includes(pattern) || id.includes(pattern)) {
+            return true;
+        }
+    }
+
+    return false;
+};
+
+/**
  * Find and click the submit button associated with an MFA input.
  */
 const clickSubmitButton = (input: HTMLInputElement): void => {
     // Strategy 1: Find submit button in the same form
     const form = input.closest("form");
     if (form) {
+        // First try explicit submit buttons
         const submitButton = form.querySelector<HTMLButtonElement | HTMLInputElement>(
-            'button[type="submit"], input[type="submit"], button:not([type])'
+            'button[type="submit"], input[type="submit"]'
         );
-        if (submitButton) {
+        if (submitButton && !submitButton.disabled) {
             console.log("[Ente Auth] Clicking submit button in form");
             submitButton.click();
             return;
         }
-    }
 
-    // Strategy 2: Find a button near the input (within a common container)
-    const container = input.closest("div, section, article, main") || document.body;
-    const buttons = container.querySelectorAll<HTMLButtonElement>("button");
-
-    for (const button of buttons) {
-        const text = button.textContent?.toLowerCase() || "";
-        const ariaLabel = button.getAttribute("aria-label")?.toLowerCase() || "";
-
-        // Look for common submit button text
-        if (
-            text.includes("submit") ||
-            text.includes("verify") ||
-            text.includes("confirm") ||
-            text.includes("continue") ||
-            text.includes("sign in") ||
-            text.includes("login") ||
-            text.includes("log in") ||
-            ariaLabel.includes("submit") ||
-            ariaLabel.includes("verify")
-        ) {
-            console.log("[Ente Auth] Clicking button with text:", text.trim());
-            button.click();
+        // Then try buttons without type (default to submit in forms)
+        const defaultButton = form.querySelector<HTMLButtonElement>('button:not([type])');
+        if (defaultButton && !defaultButton.disabled) {
+            console.log("[Ente Auth] Clicking default button in form");
+            defaultButton.click();
             return;
+        }
+
+        // Check all buttons in form for submit-like text
+        const formButtons = form.querySelectorAll<HTMLButtonElement>("button");
+        for (const button of formButtons) {
+            if (!button.disabled && isLikelySubmitButton(button)) {
+                console.log("[Ente Auth] Clicking likely submit button in form:", button.textContent?.trim());
+                button.click();
+                return;
+            }
         }
     }
 
-    // Strategy 3: Submit the form directly if we found one
+    // Strategy 2: Walk up the DOM to find buttons in parent containers
+    let container: HTMLElement | null = input.parentElement;
+    const checkedContainers = new Set<HTMLElement>();
+
+    // Walk up to 10 levels looking for buttons
+    for (let i = 0; i < 10 && container; i++) {
+        if (checkedContainers.has(container)) {
+            container = container.parentElement;
+            continue;
+        }
+        checkedContainers.add(container);
+
+        // Look for buttons and button-like elements
+        const clickables = container.querySelectorAll<HTMLElement>(
+            'button, input[type="submit"], input[type="button"], a[role="button"], [role="button"]'
+        );
+
+        for (const element of clickables) {
+            // Skip disabled elements
+            if (element.hasAttribute("disabled") ||
+                element.getAttribute("aria-disabled") === "true") {
+                continue;
+            }
+
+            if (isLikelySubmitButton(element)) {
+                console.log("[Ente Auth] Clicking button:", element.textContent?.trim());
+                element.click();
+                return;
+            }
+        }
+
+        container = container.parentElement;
+    }
+
+    // Strategy 3: Look for any visible primary-looking button on the page
+    const allButtons = document.querySelectorAll<HTMLElement>(
+        'button, input[type="submit"], a[role="button"], [role="button"]'
+    );
+
+    for (const button of allButtons) {
+        // Skip hidden or disabled buttons
+        if (button.hasAttribute("disabled") ||
+            button.getAttribute("aria-disabled") === "true" ||
+            button.offsetParent === null) {
+            continue;
+        }
+
+        if (isLikelySubmitButton(button)) {
+            // Make sure it's visible in the viewport
+            const rect = button.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                console.log("[Ente Auth] Clicking visible submit button:", button.textContent?.trim());
+                button.click();
+                return;
+            }
+        }
+    }
+
+    // Strategy 4: Submit the form directly if we found one
     if (form) {
         console.log("[Ente Auth] Submitting form directly");
         form.requestSubmit();

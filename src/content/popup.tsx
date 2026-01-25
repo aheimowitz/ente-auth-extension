@@ -3,11 +3,12 @@
  * Appears inside the MFA input field like LastPass.
  * Renders in a Shadow DOM for style isolation.
  */
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { generateOTPs, getProgress } from "@shared/otp";
 import { prettyFormatCode } from "@shared/code";
 import { getResolvedTheme } from "@shared/useTheme";
+import { browser, sendMessage } from "@shared/browser";
 import type { Code, DomainMatch } from "@shared/types";
 
 type ResolvedTheme = "light" | "dark";
@@ -22,6 +23,7 @@ const themeColors = {
         textFaint: "rgba(255, 255, 255, 0.50)",
         stroke: "rgba(255, 255, 255, 0.12)",
         accentPurple: "#8F33D6",
+        success: "#4CAF50",
     },
     light: {
         background: "#FFFFFF",
@@ -31,8 +33,11 @@ const themeColors = {
         textFaint: "rgba(0, 0, 0, 0.50)",
         stroke: "rgba(0, 0, 0, 0.12)",
         accentPurple: "#8F33D6",
+        success: "#4CAF50",
     },
 };
+
+type DropdownView = "matches" | "search" | "confirm";
 
 interface DropdownProps {
     matches: DomainMatch[];
@@ -40,6 +45,7 @@ interface DropdownProps {
     onFill: (code: string) => void;
     onClose: () => void;
     theme: ResolvedTheme;
+    domain: string;
 }
 
 const Dropdown: React.FC<DropdownProps> = ({
@@ -48,10 +54,50 @@ const Dropdown: React.FC<DropdownProps> = ({
     onFill,
     onClose,
     theme,
+    domain,
 }) => {
     const [otps, setOtps] = useState<Map<string, string>>(new Map());
     const [progress, setProgress] = useState<Map<string, number>>(new Map());
+    const [view, setView] = useState<DropdownView>(matches.length > 0 ? "matches" : "search");
+    const [allCodes, setAllCodes] = useState<Code[]>([]);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [selectedCode, setSelectedCode] = useState<Code | null>(null);
+    const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const searchInputRef = useRef<HTMLInputElement>(null);
+
+    // Load all codes when switching to search view
+    useEffect(() => {
+        if (view === "search" && allCodes.length === 0) {
+            sendMessage<{ success: boolean; data?: { codes: Code[] } }>({
+                type: "GET_CODES",
+            }).then((response) => {
+                if (response?.success && response.data?.codes) {
+                    setAllCodes(response.data.codes);
+                }
+            });
+        }
+    }, [view, allCodes.length]);
+
+    // Focus search input when entering search view
+    useEffect(() => {
+        if (view === "search" && searchInputRef.current) {
+            setTimeout(() => searchInputRef.current?.focus(), 100);
+        }
+    }, [view]);
+
+    // Get codes to display based on view
+    const displayCodes: Code[] = view === "matches"
+        ? matches.map((m) => m.code)
+        : allCodes.filter((code) => {
+            if (!searchQuery.trim()) return true;
+            const query = searchQuery.toLowerCase();
+            return (
+                code.issuer.toLowerCase().includes(query) ||
+                code.account?.toLowerCase().includes(query)
+            );
+        });
 
     // Update OTPs every second
     useEffect(() => {
@@ -59,7 +105,7 @@ const Dropdown: React.FC<DropdownProps> = ({
             const newOtps = new Map<string, string>();
             const newProgress = new Map<string, number>();
 
-            matches.forEach(({ code }) => {
+            displayCodes.forEach((code) => {
                 const [otp] = generateOTPs(code, timeOffset);
                 newOtps.set(code.id, otp);
                 newProgress.set(code.id, getProgress(code, timeOffset));
@@ -73,18 +119,16 @@ const Dropdown: React.FC<DropdownProps> = ({
         const interval = setInterval(updateOtps, 1000);
 
         return () => clearInterval(interval);
-    }, [matches, timeOffset]);
+    }, [displayCodes, timeOffset]);
 
-    // Close on outside click - use mousedown instead of click to avoid interfering
+    // Close on outside click
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
-            // Check if click is outside the dropdown
             if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
                 onClose();
             }
         };
 
-        // Delay to avoid immediate close, and use mousedown on bubble phase
         const timeoutId = setTimeout(() => {
             document.addEventListener("mousedown", handleClickOutside, false);
         }, 100);
@@ -94,6 +138,49 @@ const Dropdown: React.FC<DropdownProps> = ({
             document.removeEventListener("mousedown", handleClickOutside, false);
         };
     }, [onClose]);
+
+    // Handle code selection from search
+    const handleSelectCode = useCallback((code: Code) => {
+        const otp = otps.get(code.id) || "";
+        // If user was in search view (no matches), offer to save mapping
+        if (matches.length === 0) {
+            setSelectedCode(code);
+            setView("confirm");
+        } else {
+            onFill(otp);
+        }
+    }, [matches.length, onFill, otps]);
+
+    // Handle confirming the fill (with or without saving mapping)
+    const handleConfirmFill = useCallback(async (saveMapping: boolean) => {
+        if (!selectedCode) return;
+
+        const otp = otps.get(selectedCode.id) || generateOTPs(selectedCode, timeOffset)[0];
+
+        if (saveMapping) {
+            setSaving(true);
+            try {
+                await sendMessage({
+                    type: "ADD_CUSTOM_MAPPING",
+                    mapping: {
+                        domain,
+                        issuer: selectedCode.issuer,
+                    },
+                });
+                setSaved(true);
+                setTimeout(() => {
+                    onFill(otp);
+                }, 500);
+            } catch (e) {
+                console.error("Failed to save mapping:", e);
+                onFill(otp);
+            } finally {
+                setSaving(false);
+            }
+        } else {
+            onFill(otp);
+        }
+    }, [selectedCode, otps, timeOffset, domain, onFill]);
 
     const colors = themeColors[theme];
 
@@ -125,6 +212,32 @@ const Dropdown: React.FC<DropdownProps> = ({
             fontSize: "14px",
             fontWeight: 600,
             color: colors.textPrimary,
+            flex: 1,
+        },
+        backButton: {
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: "4px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: colors.textMuted,
+        },
+        searchContainer: {
+            padding: "8px 16px",
+            borderBottom: `1px solid ${colors.stroke}`,
+        },
+        searchInput: {
+            width: "100%",
+            padding: "8px 12px",
+            fontSize: "14px",
+            border: `1px solid ${colors.stroke}`,
+            borderRadius: "6px",
+            backgroundColor: colors.background,
+            color: colors.textPrimary,
+            outline: "none",
+            boxSizing: "border-box",
         },
         list: {
             maxHeight: "280px",
@@ -195,8 +308,244 @@ const Dropdown: React.FC<DropdownProps> = ({
             fontSize: "14px",
             fontWeight: 500,
         },
+        searchAllButton: {
+            display: "block",
+            width: "calc(100% - 32px)",
+            margin: "0 16px 16px",
+            padding: "10px 16px",
+            fontSize: "14px",
+            fontWeight: 600,
+            color: "#FFFFFF",
+            backgroundColor: colors.accentPurple,
+            border: "none",
+            borderRadius: "6px",
+            cursor: "pointer",
+            textAlign: "center",
+        },
+        confirmContainer: {
+            padding: "16px",
+        },
+        confirmText: {
+            fontSize: "14px",
+            color: colors.textPrimary,
+            marginBottom: "12px",
+            lineHeight: 1.5,
+        },
+        confirmDomain: {
+            fontWeight: 600,
+            color: colors.accentPurple,
+        },
+        confirmIssuer: {
+            fontWeight: 600,
+        },
+        buttonRow: {
+            display: "flex",
+            gap: "8px",
+        },
+        confirmButton: {
+            flex: 1,
+            padding: "10px 16px",
+            fontSize: "14px",
+            fontWeight: 600,
+            border: "none",
+            borderRadius: "6px",
+            cursor: "pointer",
+        },
+        saveButton: {
+            backgroundColor: colors.accentPurple,
+            color: "#FFFFFF",
+        },
+        skipButton: {
+            backgroundColor: colors.stroke,
+            color: colors.textPrimary,
+        },
+        savedMessage: {
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "8px",
+            padding: "16px",
+            color: colors.success,
+            fontSize: "14px",
+            fontWeight: 600,
+        },
     };
 
+    // Render confirmation view
+    if (view === "confirm" && selectedCode) {
+        if (saved) {
+            return (
+                <div ref={dropdownRef} style={styles.dropdown}>
+                    <div style={styles.header}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                            <path
+                                d="M12 2L3 7V12C3 16.97 6.84 21.66 12 23C17.16 21.66 21 16.97 21 12V7L12 2Z"
+                                fill="#8F33D6"
+                            />
+                            <path
+                                d="M10 17L6 13L7.41 11.59L10 14.17L16.59 7.58L18 9L10 17Z"
+                                fill="white"
+                            />
+                        </svg>
+                        <span style={styles.headerText}>Ente Auth Extension</span>
+                    </div>
+                    <div style={styles.savedMessage}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                            <path
+                                d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"
+                                fill={colors.success}
+                            />
+                        </svg>
+                        Mapping saved!
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <div ref={dropdownRef} style={styles.dropdown}>
+                <div style={styles.header}>
+                    <button
+                        style={styles.backButton}
+                        onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setView("search");
+                        }}
+                        title="Back to search"
+                    >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
+                        </svg>
+                    </button>
+                    <span style={styles.headerText}>Save Mapping?</span>
+                </div>
+                <div style={styles.confirmContainer}>
+                    <p style={styles.confirmText}>
+                        Remember <span style={styles.confirmIssuer}>{selectedCode.issuer}</span> for{" "}
+                        <span style={styles.confirmDomain}>{domain}</span>?
+                    </p>
+                    <div style={styles.buttonRow}>
+                        <button
+                            style={{ ...styles.confirmButton, ...styles.skipButton }}
+                            onMouseDown={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleConfirmFill(false);
+                            }}
+                            disabled={saving}
+                        >
+                            Just fill
+                        </button>
+                        <button
+                            style={{ ...styles.confirmButton, ...styles.saveButton }}
+                            onMouseDown={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleConfirmFill(true);
+                            }}
+                            disabled={saving}
+                        >
+                            {saving ? "Saving..." : "Save & fill"}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Render search view
+    if (view === "search") {
+        return (
+            <div ref={dropdownRef} style={styles.dropdown}>
+                <div style={styles.header}>
+                    {matches.length > 0 && (
+                        <button
+                            style={styles.backButton}
+                            onMouseDown={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setView("matches");
+                            }}
+                            title="Back to matches"
+                        >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
+                            </svg>
+                        </button>
+                    )}
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <path
+                            d="M12 2L3 7V12C3 16.97 6.84 21.66 12 23C17.16 21.66 21 16.97 21 12V7L12 2Z"
+                            fill="#8F33D6"
+                        />
+                        <path
+                            d="M10 17L6 13L7.41 11.59L10 14.17L16.59 7.58L18 9L10 17Z"
+                            fill="white"
+                        />
+                    </svg>
+                    <span style={styles.headerText}>Search All Codes</span>
+                </div>
+                <div style={styles.searchContainer}>
+                    <input
+                        ref={searchInputRef}
+                        type="text"
+                        placeholder="Search by name or account..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        style={styles.searchInput}
+                    />
+                </div>
+                <div style={styles.list}>
+                    {displayCodes.length === 0 ? (
+                        <div style={styles.empty}>
+                            {allCodes.length === 0 ? "Loading codes..." : "No codes found"}
+                        </div>
+                    ) : (
+                        displayCodes.map((code) => (
+                            <div
+                                key={code.id}
+                                style={styles.item}
+                                onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleSelectCode(code);
+                                }}
+                                onMouseEnter={(e) => {
+                                    (e.currentTarget as HTMLDivElement).style.backgroundColor = colors.backgroundHover;
+                                }}
+                                onMouseLeave={(e) => {
+                                    (e.currentTarget as HTMLDivElement).style.backgroundColor = "transparent";
+                                }}
+                            >
+                                <div style={styles.itemInfo}>
+                                    <div style={styles.issuer}>{code.issuer}</div>
+                                    {code.account && (
+                                        <div style={styles.account}>{code.account}</div>
+                                    )}
+                                </div>
+                                <div style={styles.otpContainer}>
+                                    <div style={styles.otp}>
+                                        {prettyFormatCode(otps.get(code.id) || "")}
+                                    </div>
+                                    <div style={styles.progressBarContainer}>
+                                        <div
+                                            style={{
+                                                ...styles.progressBar,
+                                                width: `${(progress.get(code.id) || 0) * 100}%`,
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            </div>
+        );
+    }
+
+    // Render matches view (default)
     return (
         <div ref={dropdownRef} style={styles.dropdown}>
             <div style={styles.header}>
@@ -210,7 +559,7 @@ const Dropdown: React.FC<DropdownProps> = ({
                         fill="white"
                     />
                 </svg>
-                <span style={styles.headerText}>Ente Auth</span>
+                <span style={styles.headerText}>Ente Auth Extension</span>
             </div>
             <div style={styles.list}>
                 {matches.length === 0 ? (
@@ -256,6 +605,18 @@ const Dropdown: React.FC<DropdownProps> = ({
                     ))
                 )}
             </div>
+            {matches.length === 0 && (
+                <button
+                    style={styles.searchAllButton}
+                    onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setView("search");
+                    }}
+                >
+                    Search all codes
+                </button>
+            )}
         </div>
     );
 };
@@ -265,6 +626,8 @@ interface AutofillIconProps {
     timeOffset: number;
     onFill: (code: string) => void;
     inputElement: HTMLInputElement;
+    autoFillSingleMatch: boolean;
+    domain: string;
 }
 
 const AutofillIcon: React.FC<AutofillIconProps> = ({
@@ -272,6 +635,8 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
     timeOffset,
     onFill,
     inputElement,
+    autoFillSingleMatch,
+    domain,
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [theme, setTheme] = useState<ResolvedTheme>("dark");
@@ -282,9 +647,9 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
         getResolvedTheme().then(setTheme);
     }, []);
 
-    // Auto-fill if single match
+    // Auto-fill if single match and setting enabled
     useEffect(() => {
-        if (matches.length === 1) {
+        if (autoFillSingleMatch && matches.length === 1) {
             const { code } = matches[0]!;
             const [otp] = generateOTPs(code, timeOffset);
             // Small delay to let the UI render
@@ -292,7 +657,7 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
                 onFill(otp);
             }, 100);
         }
-    }, [matches, timeOffset, onFill]);
+    }, [matches, timeOffset, onFill, autoFillSingleMatch]);
 
     const handleIconClick = (e: React.MouseEvent) => {
         e.preventDefault();
@@ -342,12 +707,12 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
                 onMouseLeave={(e) => {
                     (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)";
                 }}
-                title="Ente Auth - Click to autofill"
+                title="Ente Auth Extension - Click to autofill"
             >
                 {/* Use the same PNG icon as extension toolbar */}
                 <img
-                    src={chrome.runtime.getURL("assets/icons/icon16.png")}
-                    alt="Ente Auth"
+                    src={browser.runtime.getURL("assets/icons/icon16.png")}
+                    alt="Ente Auth Extension"
                     width="20"
                     height="20"
                     style={{ borderRadius: "4px" }}
@@ -360,6 +725,7 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
                     onFill={handleFill}
                     onClose={() => setIsOpen(false)}
                     theme={theme}
+                    domain={domain}
                 />
             )}
         </div>
@@ -405,12 +771,16 @@ export const showPopup = (
     matches: DomainMatch[],
     timeOffset: number,
     onFill: (code: string) => void,
-    inputElement?: HTMLInputElement
+    inputElement?: HTMLInputElement,
+    autoFillSingleMatch = true
 ): void => {
     // Remove existing icon
     hidePopup();
 
     if (!inputElement) return;
+
+    // Get current domain
+    const domain = window.location.hostname;
 
     // Create shadow host
     shadowHost = document.createElement("div");
@@ -431,6 +801,8 @@ export const showPopup = (
             timeOffset={timeOffset}
             onFill={onFill}
             inputElement={inputElement}
+            autoFillSingleMatch={autoFillSingleMatch}
+            domain={domain}
         />
     );
 

@@ -18,15 +18,9 @@ export const syncCodes = async (): Promise<Code[]> => {
         return [];
     }
 
-    const settings = await settingsStorage.getSettings();
-
     try {
         console.log("Syncing codes from remote...");
-        const { codes, timeOffset } = await getAuthCodes(
-            token,
-            masterKey,
-            settings.customApiEndpoint
-        );
+        const { codes, timeOffset } = await getAuthCodes(token, masterKey);
 
         // Cache the codes
         await codesStorage.setCodes(codes);
@@ -73,7 +67,19 @@ export const getCodes = async (forceSync = false): Promise<Code[]> => {
     }
 
     const cached = await codesStorage.getCodes();
-    return cached || [];
+
+    // If no cached codes but user is unlocked, try syncing
+    // This handles race condition after login where poll detects
+    // auth state before sync completes
+    if (!cached || cached.length === 0) {
+        try {
+            return await syncCodes();
+        } catch {
+            return [];
+        }
+    }
+
+    return cached;
 };
 
 /**

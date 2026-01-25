@@ -1,10 +1,11 @@
 /**
  * Options page application component.
  */
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { browser, sendMessage } from "@shared/browser";
 import { useTheme } from "@shared/useTheme";
-import type { AuthState, ExtensionSettings, ThemeMode } from "@shared/types";
+import { getBuiltInMappings } from "@shared/domain-matcher";
+import type { AuthState, Code, CustomDomainMapping, ExtensionSettings, ThemeMode } from "@shared/types";
 
 /**
  * Get the extension version from the manifest.
@@ -30,16 +31,33 @@ export const App: React.FC = () => {
     const [syncing, setSyncing] = useState(false);
     const [syncSuccess, setSyncSuccess] = useState(false);
 
-    // Load settings and auth state on mount
+    // Domain mappings state
+    const [customMappings, setCustomMappings] = useState<CustomDomainMapping[]>([]);
+    const [codes, setCodes] = useState<Code[]>([]);
+    const [showAddForm, setShowAddForm] = useState(false);
+    const [newMappingDomain, setNewMappingDomain] = useState("");
+    const [newMappingIssuer, setNewMappingIssuer] = useState("");
+    const [addingMapping, setAddingMapping] = useState(false);
+    const [showBuiltIn, setShowBuiltIn] = useState(false);
+    const [builtInSearch, setBuiltInSearch] = useState("");
+    const [expandedBuiltIn, setExpandedBuiltIn] = useState<string | null>(null);
+
+    // Load settings, auth state, and mappings on mount
     useEffect(() => {
         const loadData = async () => {
             try {
-                const [settingsResponse, authResponse] = await Promise.all([
+                const [settingsResponse, authResponse, mappingsResponse, codesResponse] = await Promise.all([
                     sendMessage<{ success: boolean; data?: ExtensionSettings }>({
                         type: "GET_SETTINGS",
                     }),
                     sendMessage<{ success: boolean; data?: AuthState }>({
                         type: "GET_AUTH_STATE",
+                    }),
+                    sendMessage<{ success: boolean; data?: CustomDomainMapping[] }>({
+                        type: "GET_CUSTOM_MAPPINGS",
+                    }),
+                    sendMessage<{ success: boolean; data?: { codes: Code[] } }>({
+                        type: "GET_CODES",
                     }),
                 ]);
 
@@ -48,6 +66,12 @@ export const App: React.FC = () => {
                 }
                 if (authResponse.success && authResponse.data) {
                     setAuthState(authResponse.data);
+                }
+                if (mappingsResponse.success && mappingsResponse.data) {
+                    setCustomMappings(mappingsResponse.data);
+                }
+                if (codesResponse.success && codesResponse.data?.codes) {
+                    setCodes(codesResponse.data.codes);
                 }
             } catch (e) {
                 console.error("Failed to load data:", e);
@@ -131,25 +155,84 @@ export const App: React.FC = () => {
         });
     };
 
-    // Handle input change
-    const handleInputChange = (
-        key: keyof ExtensionSettings,
-        value: string | number
-    ) => {
-        if (!settings) return;
-        saveSettings({ [key]: value });
-    };
+    // Add custom mapping
+    const handleAddMapping = async () => {
+        if (!newMappingDomain.trim() || !newMappingIssuer) return;
 
-    // Validate API endpoint
-    const isValidUrl = (url: string): boolean => {
-        if (!url) return true;
+        setAddingMapping(true);
         try {
-            new URL(url);
-            return true;
-        } catch {
-            return false;
+            const response = await sendMessage<{ success: boolean; error?: string }>({
+                type: "ADD_CUSTOM_MAPPING",
+                mapping: {
+                    domain: newMappingDomain.trim().toLowerCase(),
+                    issuer: newMappingIssuer,
+                },
+            });
+
+            if (response.success) {
+                // Refresh mappings list
+                const mappingsResponse = await sendMessage<{
+                    success: boolean;
+                    data?: CustomDomainMapping[];
+                }>({ type: "GET_CUSTOM_MAPPINGS" });
+
+                if (mappingsResponse.success && mappingsResponse.data) {
+                    setCustomMappings(mappingsResponse.data);
+                }
+
+                setNewMappingDomain("");
+                setNewMappingIssuer("");
+                setShowAddForm(false);
+            } else {
+                setError(response.error || "Failed to add mapping");
+            }
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Failed to add mapping");
+        } finally {
+            setAddingMapping(false);
         }
     };
+
+    // Delete custom mapping
+    const handleDeleteMapping = async (domain: string) => {
+        try {
+            const response = await sendMessage<{ success: boolean; error?: string }>({
+                type: "DELETE_CUSTOM_MAPPING",
+                domain,
+            });
+
+            if (response.success) {
+                setCustomMappings((prev) =>
+                    prev.filter((m) => m.domain.toLowerCase() !== domain.toLowerCase())
+                );
+            } else {
+                setError(response.error || "Failed to delete mapping");
+            }
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Failed to delete mapping");
+        }
+    };
+
+    // Filter built-in mappings based on search
+    const builtInMappings = getBuiltInMappings();
+    const filteredBuiltInMappings = useMemo(() => {
+        if (!builtInSearch.trim()) return Object.entries(builtInMappings);
+
+        const query = builtInSearch.toLowerCase();
+        return Object.entries(builtInMappings).filter(([issuer, domains]) => {
+            return (
+                issuer.toLowerCase().includes(query) ||
+                domains.some((d) => d.toLowerCase().includes(query))
+            );
+        });
+    }, [builtInMappings, builtInSearch]);
+
+    // Get unique issuers from codes for dropdown
+    const uniqueIssuers = useMemo(() => {
+        const issuers = new Set<string>();
+        codes.forEach((code) => issuers.add(code.issuer));
+        return Array.from(issuers).sort((a, b) => a.localeCompare(b));
+    }, [codes]);
 
     if (!settings) {
         return (
@@ -163,7 +246,7 @@ export const App: React.FC = () => {
         <div className="options-container">
             <div className="options-header">
                 <Logo />
-                <h1>Ente Auth Settings</h1>
+                <h1>Ente Auth Extension Settings</h1>
             </div>
 
             <div className="options-content">
@@ -196,18 +279,36 @@ export const App: React.FC = () => {
 
                     <div className="setting-item">
                         <div className="setting-info">
-                            <label>Enable autofill</label>
+                            <label>Show autofill icon</label>
                             <p>
-                                Show autofill icon on MFA fields and automatically
-                                fill codes when a single match is found.
+                                Display the autofill icon on detected MFA input fields.
                             </p>
                         </div>
                         <label className="toggle">
                             <input
                                 type="checkbox"
-                                checked={settings.autofillEnabled}
+                                checked={settings.showAutofillIcon}
                                 onChange={() =>
-                                    handleToggle("autofillEnabled")
+                                    handleToggle("showAutofillIcon")
+                                }
+                            />
+                            <span className="toggle-slider"></span>
+                        </label>
+                    </div>
+
+                    <div className="setting-item">
+                        <div className="setting-info">
+                            <label>Auto-fill single match</label>
+                            <p>
+                                Automatically fill and submit when only one code matches.
+                            </p>
+                        </div>
+                        <label className="toggle">
+                            <input
+                                type="checkbox"
+                                checked={settings.autoFillSingleMatch}
+                                onChange={() =>
+                                    handleToggle("autoFillSingleMatch")
                                 }
                             />
                             <span className="toggle-slider"></span>
@@ -216,30 +317,181 @@ export const App: React.FC = () => {
                 </section>
 
                 <section className="settings-section">
-                    <h2>Advanced</h2>
+                    <h2>Domain Mappings</h2>
+                    <p className="section-description">
+                        Custom mappings help match websites to your codes when automatic detection doesn't work.
+                    </p>
 
-                    <div className="setting-item vertical">
-                        <div className="setting-info">
-                            <label>Custom API endpoint</label>
-                            <p>
-                                For self-hosted Ente instances. Leave empty to use
-                                the default Ente servers.
-                            </p>
-                        </div>
-                        <input
-                            type="url"
-                            className="text-input"
-                            placeholder="https://your-ente-server.com"
-                            value={settings.customApiEndpoint || ""}
-                            onChange={(e) => {
-                                const value = e.target.value;
-                                if (isValidUrl(value)) {
-                                    saveSettings({
-                                        customApiEndpoint: value || undefined,
-                                    });
-                                }
-                            }}
-                        />
+                    {/* Custom Mappings */}
+                    <div className="mappings-subsection">
+                        <h3>Custom Mappings</h3>
+
+                        {customMappings.length === 0 && !showAddForm ? (
+                            <p className="empty-state">No custom mappings yet.</p>
+                        ) : (
+                            <div className="mappings-list">
+                                {customMappings
+                                    .sort((a, b) => b.createdAt - a.createdAt)
+                                    .map((mapping) => (
+                                        <div key={mapping.domain} className="mapping-item">
+                                            <div className="mapping-info">
+                                                <span className="mapping-domain">{mapping.domain}</span>
+                                                <span className="mapping-arrow">→</span>
+                                                <span className="mapping-issuer">{mapping.issuer}</span>
+                                            </div>
+                                            <button
+                                                className="delete-button"
+                                                onClick={() => handleDeleteMapping(mapping.domain)}
+                                                title="Delete mapping"
+                                            >
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    ))}
+                            </div>
+                        )}
+
+                        {showAddForm ? (
+                            <div className="add-mapping-form">
+                                <div className="form-row">
+                                    <input
+                                        type="text"
+                                        placeholder="Domain (e.g., mycompany.okta.com)"
+                                        value={newMappingDomain}
+                                        onChange={(e) => setNewMappingDomain(e.target.value)}
+                                        className="form-input"
+                                    />
+                                </div>
+                                <div className="form-row">
+                                    <select
+                                        value={newMappingIssuer}
+                                        onChange={(e) => setNewMappingIssuer(e.target.value)}
+                                        className="form-select"
+                                    >
+                                        <option value="">Select a code...</option>
+                                        {uniqueIssuers.map((issuer) => (
+                                            <option key={issuer} value={issuer}>
+                                                {issuer}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="form-actions">
+                                    <button
+                                        className="cancel-button"
+                                        onClick={() => {
+                                            setShowAddForm(false);
+                                            setNewMappingDomain("");
+                                            setNewMappingIssuer("");
+                                        }}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        className="save-button"
+                                        onClick={handleAddMapping}
+                                        disabled={
+                                            addingMapping ||
+                                            !newMappingDomain.trim() ||
+                                            !newMappingIssuer
+                                        }
+                                    >
+                                        {addingMapping ? "Saving..." : "Save"}
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <button
+                                className="add-mapping-button"
+                                onClick={() => setShowAddForm(true)}
+                            >
+                                + Add Mapping
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Built-in Mappings */}
+                    <div className="mappings-subsection builtin">
+                        <button
+                            className="collapse-toggle"
+                            onClick={() => setShowBuiltIn(!showBuiltIn)}
+                        >
+                            <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="currentColor"
+                                style={{
+                                    transform: showBuiltIn ? "rotate(90deg)" : "rotate(0deg)",
+                                    transition: "transform 0.2s",
+                                }}
+                            >
+                                <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
+                            </svg>
+                            <h3>Built-in Mappings ({Object.keys(builtInMappings).length})</h3>
+                        </button>
+
+                        {showBuiltIn && (
+                            <>
+                                <div className="search-box">
+                                    <input
+                                        type="text"
+                                        placeholder="Search built-in mappings..."
+                                        value={builtInSearch}
+                                        onChange={(e) => setBuiltInSearch(e.target.value)}
+                                        className="search-input"
+                                    />
+                                </div>
+                                <div className="mappings-list builtin-list">
+                                    {filteredBuiltInMappings.map(([issuer, domains]) => {
+                                        const isExpanded = expandedBuiltIn === issuer;
+                                        return (
+                                            <div
+                                                key={issuer}
+                                                className={`mapping-item builtin ${isExpanded ? "expanded" : ""}`}
+                                                onClick={() => setExpandedBuiltIn(isExpanded ? null : issuer)}
+                                            >
+                                                <div className="mapping-info">
+                                                    <span className="mapping-issuer">{issuer}</span>
+                                                    <span className="mapping-arrow">→</span>
+                                                    {isExpanded ? (
+                                                        <div className="mapping-domains-expanded">
+                                                            {domains.map((domain) => (
+                                                                <span key={domain} className="domain-tag">
+                                                                    {domain}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="mapping-domains">
+                                                            {domains.join(", ")}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <svg
+                                                    className="expand-icon"
+                                                    width="16"
+                                                    height="16"
+                                                    viewBox="0 0 24 24"
+                                                    fill="currentColor"
+                                                    style={{
+                                                        transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                                                        transition: "transform 0.2s",
+                                                    }}
+                                                >
+                                                    <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z" />
+                                                </svg>
+                                            </div>
+                                        );
+                                    })}
+                                    {filteredBuiltInMappings.length === 0 && (
+                                        <p className="empty-state">No matches found.</p>
+                                    )}
+                                </div>
+                            </>
+                        )}
                     </div>
                 </section>
 
@@ -290,7 +542,15 @@ export const App: React.FC = () => {
 
             <div className="options-footer">
                 <p>
-                    Ente Auth v{getExtensionVersion()} •{" "}
+                    Ente Auth Extension v{getExtensionVersion()} •{" "}
+                    <a
+                        href="https://github.com/aheimowitz/ente-auth-extension"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        GitHub
+                    </a>
+                    {" • "}
                     <a
                         href="https://ente.io"
                         target="_blank"

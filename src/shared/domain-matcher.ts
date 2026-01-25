@@ -1,110 +1,35 @@
 /**
  * Domain matching utilities for matching websites to stored auth codes.
  */
-import type { Code, DomainMatch } from "./types";
+import type { Code, CustomDomainMapping, DomainMatch } from "./types";
+import KNOWN_DOMAIN_MAPPINGS from "../data/domain-mappings.json";
 
 /**
- * Known domain mappings for common services.
- * Maps issuer names to their associated domains.
+ * Runtime storage for custom domain mappings.
+ * These are set by the background script from user preferences.
  */
-const KNOWN_DOMAIN_MAPPINGS: Record<string, string[]> = {
-    google: [
-        "google.com",
-        "gmail.com",
-        "youtube.com",
-        "accounts.google.com",
-        "myaccount.google.com",
-    ],
-    github: ["github.com", "github.io", "githubusercontent.com"],
-    microsoft: [
-        "microsoft.com",
-        "live.com",
-        "outlook.com",
-        "office.com",
-        "azure.com",
-        "xbox.com",
-    ],
-    amazon: ["amazon.com", "amazon.co.uk", "amazon.de", "aws.amazon.com"],
-    aws: ["aws.amazon.com", "console.aws.amazon.com", "signin.aws.amazon.com"],
-    facebook: ["facebook.com", "fb.com", "messenger.com", "instagram.com"],
-    instagram: ["instagram.com"],
-    twitter: ["twitter.com", "x.com"],
-    x: ["x.com", "twitter.com"],
-    apple: ["apple.com", "icloud.com", "appleid.apple.com"],
-    dropbox: ["dropbox.com"],
-    discord: ["discord.com", "discord.gg"],
-    slack: ["slack.com"],
-    linkedin: ["linkedin.com"],
-    reddit: ["reddit.com"],
-    twitch: ["twitch.tv"],
-    steam: ["steampowered.com", "steamcommunity.com", "store.steampowered.com"],
-    paypal: ["paypal.com"],
-    stripe: ["stripe.com", "dashboard.stripe.com"],
-    digitalocean: ["digitalocean.com", "cloud.digitalocean.com"],
-    cloudflare: ["cloudflare.com", "dash.cloudflare.com"],
-    netlify: ["netlify.com", "netlify.app"],
-    vercel: ["vercel.com"],
-    heroku: ["heroku.com", "herokucdn.com"],
-    bitbucket: ["bitbucket.org"],
-    gitlab: ["gitlab.com"],
-    atlassian: ["atlassian.com", "atlassian.net", "jira.com", "confluence.com"],
-    jira: ["jira.com", "atlassian.com", "atlassian.net"],
-    confluence: ["confluence.com", "atlassian.com", "atlassian.net"],
-    notion: ["notion.so", "notion.com"],
-    figma: ["figma.com"],
-    adobe: ["adobe.com", "creativecloud.adobe.com"],
-    spotify: ["spotify.com"],
-    coinbase: ["coinbase.com"],
-    binance: ["binance.com", "binance.us"],
-    kraken: ["kraken.com"],
-    bitwarden: ["bitwarden.com", "vault.bitwarden.com"],
-    lastpass: ["lastpass.com"],
-    "1password": ["1password.com"],
-    proton: ["proton.me", "protonmail.com", "protonvpn.com"],
-    protonmail: ["proton.me", "protonmail.com"],
-    tutanota: ["tutanota.com", "tuta.com"],
-    namecheap: ["namecheap.com"],
-    godaddy: ["godaddy.com"],
-    hover: ["hover.com"],
-    gandi: ["gandi.net"],
-    npm: ["npmjs.com", "npm.io"],
-    pypi: ["pypi.org"],
-    docker: ["docker.com", "hub.docker.com"],
-    nvidia: ["nvidia.com"],
-    epic: ["epicgames.com", "unrealengine.com"],
-    ubisoft: ["ubisoft.com", "ubi.com"],
-    ea: ["ea.com", "origin.com"],
-    blizzard: ["blizzard.com", "battle.net"],
-    ente: ["ente.io", "auth.ente.io", "web.ente.io"],
-    snowflake: ["snowflakecomputing.com", "snowflake.com"],
-    okta: ["okta.com", "oktapreview.com"],
-    auth0: ["auth0.com"],
-    duo: ["duosecurity.com", "duo.com"],
-    onelogin: ["onelogin.com"],
-    ping: ["pingidentity.com", "pingone.com"],
-    datadog: ["datadoghq.com", "datadog.com"],
-    pagerduty: ["pagerduty.com"],
-    sentry: ["sentry.io"],
-    newrelic: ["newrelic.com"],
-    mongodb: ["mongodb.com", "cloud.mongodb.com"],
-    postgres: ["postgresql.org"],
-    elastic: ["elastic.co", "elasticsearch.com"],
-    redis: ["redis.io", "redis.com", "redislabs.com"],
-    jenkins: ["jenkins.io"],
-    circleci: ["circleci.com"],
-    travisci: ["travis-ci.com", "travis-ci.org"],
-    terraform: ["terraform.io", "hashicorp.com"],
-    hashicorp: ["hashicorp.com", "terraform.io", "vault.io", "consul.io"],
-    vault: ["vaultproject.io", "hashicorp.com"],
-    twilio: ["twilio.com"],
-    sendgrid: ["sendgrid.com"],
-    mailchimp: ["mailchimp.com"],
-    zendesk: ["zendesk.com"],
-    intercom: ["intercom.com", "intercom.io"],
-    hubspot: ["hubspot.com"],
-    salesforce: ["salesforce.com", "force.com", "lightning.force.com"],
-    zoom: ["zoom.us", "zoom.com"],
-    webex: ["webex.com", "cisco.com"],
+let customMappings: CustomDomainMapping[] = [];
+
+/**
+ * Set custom domain mappings for use in matching.
+ * Custom mappings take priority over built-in mappings.
+ */
+export const setCustomMappings = (mappings: CustomDomainMapping[]): void => {
+    customMappings = mappings;
+};
+
+/**
+ * Get the current custom mappings (for testing/debugging).
+ */
+export const getCustomMappings = (): CustomDomainMapping[] => {
+    return customMappings;
+};
+
+/**
+ * Get the built-in domain mappings (for display in settings).
+ */
+export const getBuiltInMappings = (): Record<string, string[]> => {
+    return KNOWN_DOMAIN_MAPPINGS;
 };
 
 /**
@@ -169,6 +94,13 @@ const normalizeIssuer = (issuer: string): string => {
 };
 
 /**
+ * Check if a hostname matches a domain (exact or subdomain).
+ */
+const domainMatches = (hostname: string, domain: string): boolean => {
+    return hostname === domain || hostname.endsWith(`.${domain}`);
+};
+
+/**
  * Match codes to a domain.
  *
  * @param codes The list of codes to search.
@@ -188,14 +120,33 @@ export const matchCodesToDomain = (
         const normalizedIssuer = normalizeIssuer(code.issuer);
         let confidence = 0;
 
+        // 0. Check custom mappings FIRST (confidence: 0.99, just below exact match)
+        // Custom mappings match on exact domain or subdomain
+        const customMatch = customMappings.find((mapping) => {
+            const mappingDomain = mapping.domain.toLowerCase();
+            // Match if the hostname matches the mapping domain exactly or as subdomain
+            return domainMatches(hostname, mappingDomain) || hostname === mappingDomain;
+        });
+
+        if (customMatch) {
+            // Check if this code's issuer matches the custom mapping
+            const mappingIssuerNormalized = normalizeIssuer(customMatch.issuer);
+            if (
+                normalizedIssuer === mappingIssuerNormalized ||
+                code.issuer.toLowerCase() === customMatch.issuer.toLowerCase()
+            ) {
+                confidence = 0.99;
+            }
+        }
+
         // 1. Exact match (confidence: 1.0)
-        if (issuer === hostname || issuer === baseDomain) {
+        if (confidence === 0 && (issuer === hostname || issuer === baseDomain)) {
             confidence = 1.0;
         }
         // 2. Check known mappings
-        else {
+        if (confidence === 0) {
             // First try exact match on normalized issuer
-            let knownDomains = KNOWN_DOMAIN_MAPPINGS[normalizedIssuer];
+            let knownDomains = KNOWN_DOMAIN_MAPPINGS[normalizedIssuer as keyof typeof KNOWN_DOMAIN_MAPPINGS];
 
             // If no exact match, check if issuer contains any known key as a whole word
             // This handles cases like "AWS - Adam" or "Adam's AWS Account"

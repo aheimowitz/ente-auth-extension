@@ -66,12 +66,12 @@ export interface AuthCodesAndTimeOffset {
  * Extension settings stored in local storage.
  */
 export interface ExtensionSettings {
-    /** Enable autofill functionality. Default: true */
-    autofillEnabled: boolean;
+    /** Show autofill icon on MFA fields. Default: true */
+    showAutofillIcon: boolean;
+    /** Automatically fill and submit when single match found. Default: true */
+    autoFillSingleMatch: boolean;
     /** Sync interval in minutes. Default: 5 */
     syncInterval: number;
-    /** Custom API endpoint for self-hosted instances. */
-    customApiEndpoint?: string;
     /** Theme mode. Default: "system" */
     theme: ThemeMode;
 }
@@ -80,7 +80,8 @@ export interface ExtensionSettings {
  * Default extension settings.
  */
 export const defaultSettings: ExtensionSettings = {
-    autofillEnabled: true,
+    showAutofillIcon: true,
+    autoFillSingleMatch: true,
     syncInterval: 5,
     theme: "system",
 };
@@ -101,7 +102,10 @@ export type ExtensionMessage =
     | { type: "GET_AUTH_STATE" }
     | { type: "GET_SETTINGS" }
     | { type: "SET_SETTINGS"; settings: Partial<ExtensionSettings> }
-    | { type: "FILL_CODE"; code: string; tabId: number };
+    | { type: "FILL_CODE"; code: string; tabId: number }
+    | { type: "GET_CUSTOM_MAPPINGS" }
+    | { type: "ADD_CUSTOM_MAPPING"; mapping: Omit<CustomDomainMapping, "createdAt"> }
+    | { type: "DELETE_CUSTOM_MAPPING"; domain: string };
 
 /**
  * Credentials captured from web login.
@@ -175,6 +179,18 @@ export interface AuthenticatorEntityKey {
 export interface DomainMatch {
     code: Code;
     confidence: number;
+}
+
+/**
+ * Custom domain mapping created by the user.
+ */
+export interface CustomDomainMapping {
+    /** The domain to match, e.g., "mycompany.okta.com" */
+    domain: string;
+    /** The issuer name to match, e.g., "Okta - Work" (matches Code.issuer) */
+    issuer: string;
+    /** Timestamp when the mapping was created, for sorting */
+    createdAt: number;
 }
 
 /**
