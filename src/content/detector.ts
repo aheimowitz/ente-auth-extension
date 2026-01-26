@@ -5,11 +5,13 @@
 import type { MFAFieldDetection } from "@shared/types";
 
 /**
- * Attribute patterns that suggest MFA input.
+ * Attribute patterns that suggest MFA input (used in name/id/class).
+ * These are typically code-level identifiers, so mostly English.
  */
 const MFA_ATTRIBUTE_PATTERNS = [
     "otp",
     "totp",
+    "hotp",
     "mfa",
     "2fa",
     "twofa",
@@ -23,14 +25,17 @@ const MFA_ATTRIBUTE_PATTERNS = [
     "security",
     "pin",
     "passcode",
+    "one-time",
+    "onetime",
 ];
 
 /**
  * Label/placeholder patterns that suggest MFA input.
+ * Includes translations for common languages.
  */
 const MFA_LABEL_PATTERNS = [
+    // English
     "verification code",
-    "verification-code",
     "authentication code",
     "security code",
     "2-factor",
@@ -45,6 +50,80 @@ const MFA_LABEL_PATTERNS = [
     "enter code",
     "enter the code",
     "passcode",
+    "confirm code",
+    "access code",
+
+    // Italian
+    "codice di verifica",
+    "codice di autenticazione",
+    "codice di sicurezza",
+    "codice otp",
+    "inserisci il codice",
+    "inserisci codice",
+    "codice a 6 cifre",
+    "codice monouso",
+
+    // Spanish
+    "código de verificación",
+    "código de autenticación",
+    "código de seguridad",
+    "introduce el código",
+    "ingrese el código",
+    "ingresa el código",
+    "código de 6 dígitos",
+    "código único",
+
+    // French
+    "code de vérification",
+    "code d'authentification",
+    "code de sécurité",
+    "entrez le code",
+    "saisissez le code",
+    "code à 6 chiffres",
+    "code à usage unique",
+
+    // German
+    "bestätigungscode",
+    "verifizierungscode",
+    "authentifizierungscode",
+    "sicherheitscode",
+    "code eingeben",
+    "6-stelliger code",
+    "einmalcode",
+
+    // Portuguese
+    "código de verificação",
+    "código de autenticação",
+    "código de segurança",
+    "digite o código",
+    "insira o código",
+    "código de 6 dígitos",
+    "código único",
+
+    // Dutch
+    "verificatiecode",
+    "beveiligingscode",
+    "voer code in",
+
+    // Polish
+    "kod weryfikacyjny",
+    "kod bezpieczeństwa",
+    "wprowadź kod",
+
+    // Russian (transliterated patterns that might appear in code)
+    "код подтверждения",
+    "код верификации",
+    "введите код",
+
+    // Japanese (common patterns)
+    "認証コード",
+    "確認コード",
+    "ワンタイム",
+
+    // Chinese (common patterns)
+    "验证码",
+    "認證碼",
+    "安全码",
 ];
 
 /**
@@ -58,45 +137,71 @@ const matchesPattern = (value: string | null, patterns: string[]): boolean => {
 
 /**
  * Calculate confidence score for a single input element.
+ * Prioritizes language-agnostic signals (HTML attributes) over text patterns.
  */
 const calculateConfidence = (input: HTMLInputElement): number => {
     let confidence = 0;
 
-    // Check autocomplete="one-time-code" (high confidence)
+    // === HIGH CONFIDENCE: Language-agnostic HTML attributes ===
+
+    // autocomplete="one-time-code" is the standard way to mark OTP fields
     if (input.autocomplete === "one-time-code") {
-        confidence += 0.6;
+        confidence += 0.7;
     }
 
-    // Check name/id attributes
-    const nameOrId = `${input.name || ""} ${input.id || ""}`;
-    if (matchesPattern(nameOrId, MFA_ATTRIBUTE_PATTERNS)) {
+    // inputmode="numeric" + maxlength="6" is a very strong signal
+    if (input.inputMode === "numeric" && input.maxLength === 6) {
+        confidence += 0.5;
+    }
+
+    // Pattern attribute for 6 digits
+    const pattern = input.pattern;
+    if (pattern && (/\[0-9\]\{6\}/.test(pattern) || /\\d\{6\}/.test(pattern) || /^\d{6}$/.test(pattern))) {
+        confidence += 0.4;
+    }
+
+    // maxlength of 6 alone is a moderate signal
+    if (input.maxLength === 6) {
+        confidence += 0.2;
+    }
+
+    // maxlength of 4 or 8 (some services use these)
+    if (input.maxLength === 4 || input.maxLength === 8) {
+        confidence += 0.1;
+    }
+
+    // inputmode="numeric" alone
+    if (input.inputMode === "numeric" && input.maxLength !== 6) {
+        confidence += 0.15;
+    }
+
+    // type="tel" or type="number" (common for numeric codes)
+    if (input.type === "tel" || input.type === "number") {
+        confidence += 0.15;
+    }
+
+    // === MEDIUM CONFIDENCE: Code-level identifiers (usually English) ===
+
+    // Check name/id/class attributes
+    const nameIdClass = `${input.name || ""} ${input.id || ""} ${input.className || ""}`;
+    if (matchesPattern(nameIdClass, MFA_ATTRIBUTE_PATTERNS)) {
         confidence += 0.3;
     }
+
+    // Check data-* attributes
+    const dataAttrs = Array.from(input.attributes)
+        .filter(attr => attr.name.startsWith("data-"))
+        .map(attr => `${attr.name} ${attr.value}`)
+        .join(" ");
+    if (matchesPattern(dataAttrs, MFA_ATTRIBUTE_PATTERNS)) {
+        confidence += 0.2;
+    }
+
+    // === LOWER CONFIDENCE: Text content (language-dependent) ===
 
     // Check placeholder
     if (matchesPattern(input.placeholder, MFA_LABEL_PATTERNS)) {
         confidence += 0.25;
-    }
-
-    // Check pattern attribute for 6 digits
-    const pattern = input.pattern;
-    if (pattern && (/\[0-9\]\{6\}/.test(pattern) || /\\d\{6\}/.test(pattern))) {
-        confidence += 0.3;
-    }
-
-    // Check inputmode="numeric" with maxlength="6"
-    if (input.inputMode === "numeric" && input.maxLength === 6) {
-        confidence += 0.35;
-    }
-
-    // Check for maxlength of 6 (common for OTP)
-    if (input.maxLength === 6) {
-        confidence += 0.15;
-    }
-
-    // Check type="tel" or type="number" (common for numeric codes)
-    if (input.type === "tel" || input.type === "number") {
-        confidence += 0.1;
     }
 
     // Check for associated label
@@ -110,12 +215,22 @@ const calculateConfidence = (input: HTMLInputElement): number => {
         confidence += 0.2;
     }
 
-    // Check if input is within a form/section with MFA-related text
-    const container = input.closest("form, section, div[class*='auth'], div[class*='mfa'], div[class*='otp']");
-    if (container) {
-        const containerText = container.textContent?.toLowerCase() || "";
-        if (MFA_LABEL_PATTERNS.some((p) => containerText.includes(p))) {
+    // Check aria-describedby text
+    const describedById = input.getAttribute("aria-describedby");
+    if (describedById) {
+        const describedBy = document.getElementById(describedById);
+        if (describedBy && matchesPattern(describedBy.textContent, MFA_LABEL_PATTERNS)) {
             confidence += 0.15;
+        }
+    }
+
+    // Check nearby text (within parent or form)
+    const container = input.closest("form, fieldset, [role='group']") || input.parentElement?.parentElement;
+    if (container) {
+        // Check class/id of container
+        const containerIdClass = `${container.id || ""} ${container.className || ""}`;
+        if (matchesPattern(containerIdClass, MFA_ATTRIBUTE_PATTERNS)) {
+            confidence += 0.2;
         }
     }
 
