@@ -3,7 +3,7 @@
  * Appears inside the MFA input field like LastPass.
  * Renders in a Shadow DOM for style isolation.
  */
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { generateOTPs, getProgress } from "@shared/otp";
 import { prettyFormatCode } from "@shared/code";
@@ -87,10 +87,12 @@ const Dropdown: React.FC<DropdownProps> = ({
         }
     }, [view]);
 
-    // Get codes to display based on view
-    const displayCodes: Code[] = view === "matches"
-        ? matches.map((m) => m.code)
-        : allCodes.filter((code) => {
+    // Get codes to display based on view (memoized to prevent infinite re-renders)
+    const displayCodes = useMemo(() => {
+        if (view === "matches") {
+            return matches.map((m) => m.code);
+        }
+        return allCodes.filter((code) => {
             if (!searchQuery.trim()) return true;
             const query = searchQuery.toLowerCase();
             return (
@@ -98,6 +100,7 @@ const Dropdown: React.FC<DropdownProps> = ({
                 code.account?.toLowerCase().includes(query)
             );
         });
+    }, [view, matches, allCodes, searchQuery]);
 
     // Update OTPs every second
     useEffect(() => {

@@ -4,7 +4,7 @@
  */
 import React, { useState, useEffect, useRef } from "react";
 import { prettyFormatCode } from "@shared/code";
-import { getProgress } from "@shared/otp";
+import { getProgress, generateOTPs } from "@shared/otp";
 import type { Code } from "@shared/types";
 
 interface CodeCardProps {
@@ -21,37 +21,93 @@ export const CodeCard: React.FC<CodeCardProps> = ({
     nextOtp,
 }) => {
     const [copied, setCopied] = useState(false);
-    const [progress, setProgress] = useState(() => getProgress(code, timeOffset));
-    const animationFrameRef = useRef<number | undefined>(undefined);
+    const progressBarRef = useRef<HTMLDivElement>(null);
 
-    // Animate progress bar smoothly using requestAnimationFrame
+    // Local OTP state that updates at period boundaries (synced with progress bar)
+    const [displayOtp, setDisplayOtp] = useState(otp);
+    const [displayNextOtp, setDisplayNextOtp] = useState(nextOtp);
+
+    // Use CSS animation for smooth progress bar (runs on compositor thread, unaffected by JS)
+    const period = code.period;
+    const [isWarning, setIsWarning] = useState(() => getProgress(code, timeOffset) < 0.4);
+
     useEffect(() => {
-        const updateProgress = () => {
-            setProgress(getProgress(code, timeOffset));
-            animationFrameRef.current = requestAnimationFrame(updateProgress);
+        const progressBar = progressBarRef.current;
+        if (!progressBar) return;
+
+        let intervalId: number | undefined;
+        let warningIntervalId: number | undefined;
+
+        const updateAnimation = () => {
+            const periodMs = period * 1000;
+            const timestamp = Date.now() + timeOffset;
+            const timeRemaining = periodMs - (timestamp % periodMs);
+            const currentProgress = timeRemaining / periodMs;
+
+            // Update warning state immediately when resetting
+            setIsWarning(currentProgress < 0.4);
+
+            // Update OTPs at period boundary (when progress resets to ~100%)
+            if (currentProgress > 0.95) {
+                const [newOtp, newNextOtp] = generateOTPs(code, timeOffset);
+                setDisplayOtp(newOtp);
+                setDisplayNextOtp(newNextOtp);
+            }
+
+            // Set current width and animate to 0
+            progressBar.style.transition = 'none';
+            progressBar.style.width = `${currentProgress * 100}%`;
+
+            // Force reflow to apply the width immediately
+            progressBar.offsetHeight;
+
+            // Animate from current position to 0 over remaining time
+            progressBar.style.transition = `width ${timeRemaining}ms linear`;
+            progressBar.style.width = '0%';
         };
 
-        animationFrameRef.current = requestAnimationFrame(updateProgress);
+        const checkWarning = () => {
+            setIsWarning(getProgress(code, timeOffset) < 0.4);
+        };
+
+        updateAnimation();
+
+        // Check warning color every second
+        warningIntervalId = window.setInterval(checkWarning, 1000);
+
+        // Recalculate animation at each period boundary
+        const periodMs = period * 1000;
+        const timestamp = Date.now() + timeOffset;
+        const timeToNextPeriod = periodMs - (timestamp % periodMs);
+
+        const timeoutId = window.setTimeout(() => {
+            updateAnimation();
+            // Then set up interval for subsequent periods
+            intervalId = window.setInterval(updateAnimation, periodMs);
+        }, timeToNextPeriod);
 
         return () => {
-            if (animationFrameRef.current) {
-                cancelAnimationFrame(animationFrameRef.current);
-            }
+            window.clearTimeout(timeoutId);
+            if (intervalId) window.clearInterval(intervalId);
+            if (warningIntervalId) window.clearInterval(warningIntervalId);
         };
-    }, [code, timeOffset]);
+    }, [period, timeOffset, code]);
+
+    // Sync with parent props when they change (e.g., initial load or code change)
+    useEffect(() => {
+        setDisplayOtp(otp);
+        setDisplayNextOtp(nextOtp);
+    }, [otp, nextOtp]);
 
     const handleCardClick = async () => {
         try {
-            await navigator.clipboard.writeText(otp);
+            await navigator.clipboard.writeText(displayOtp);
             setCopied(true);
             setTimeout(() => setCopied(false), 1500);
         } catch (error) {
             console.error("Failed to copy:", error);
         }
     };
-
-    // Progress bar turns yellow when < 40% time remaining
-    const isWarning = progress < 0.4;
 
     return (
         <div
@@ -60,8 +116,8 @@ export const CodeCard: React.FC<CodeCardProps> = ({
         >
             {/* Progress bar at top */}
             <div
+                ref={progressBarRef}
                 className={`code-progress-bar ${isWarning ? "warning" : ""}`}
-                style={{ width: `${progress * 100}%` }}
             />
 
             {/* Pin indicator */}
@@ -81,15 +137,16 @@ export const CodeCard: React.FC<CodeCardProps> = ({
                 <div className="code-left">
                     <div className="code-issuer">{code.issuer}</div>
                     <div className="code-account">{code.account || ""}</div>
-                    <div className="code-otp">
-                        {copied ? "Copied!" : prettyFormatCode(otp)}
-                    </div>
+                    <div className="code-otp">{prettyFormatCode(displayOtp)}</div>
                 </div>
                 <div className="code-right">
                     <div className="code-next-label">next</div>
-                    <div className="code-next-otp">{prettyFormatCode(nextOtp)}</div>
+                    <div className="code-next-otp">{prettyFormatCode(displayNextOtp)}</div>
                 </div>
             </div>
+
+            {/* Copied toast pill */}
+            {copied && <div className="copied-pill">Copied</div>}
         </div>
     );
 };

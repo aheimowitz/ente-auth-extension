@@ -226,8 +226,8 @@ body {
     left: 0;
     height: 4px;
     background-color: var(--accent-purple);
-    transition: width 0.1s linear;
     border-radius: 0 2px 2px 0;
+    will-change: width;
 }
 
 .code-progress-bar.warning {
@@ -331,9 +331,32 @@ body {
     color: var(--text-muted);
 }
 
-/* Copy feedback */
-.code-card.copied .code-otp {
-    color: var(--success-green);
+/* Copy feedback - toast pill (matches Ente app style) */
+.copied-pill {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 6px 12px;
+    background-color: #fff;
+    color: #000;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 16px;
+    animation: fadeIn 0.15s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    white-space: nowrap;
+}
+
+/* Light theme: dark pill */
+.theme-light .copied-pill {
+    background-color: #181818;
+    color: #fff;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 /* Empty state */
