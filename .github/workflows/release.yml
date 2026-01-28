@@ -55,12 +55,33 @@ jobs:
           cd dist-firefox
           zip -r ../ente-auth-firefox-${{ steps.version.outputs.version }}.zip .
 
+      - name: Generate Release Notes
+        id: release_notes
+        run: |
+          # Get the previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          echo "## What's Changed" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+
+          if [ -n "$PREV_TAG" ]; then
+            git log $PREV_TAG..HEAD --pretty=format:"- %s" >> $GITHUB_OUTPUT
+          else
+            git log --pretty=format:"- %s" -10 >> $GITHUB_OUTPUT
+          fi
+
+          echo "" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...v${{ steps.version.outputs.version }}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           name: v${{ steps.version.outputs.version }}
           tag_name: v${{ steps.version.outputs.version }}
-          generate_release_notes: true
+          body: ${{ steps.release_notes.outputs.notes }}
           files: |
             ente-auth-chrome-${{ steps.version.outputs.version }}.zip
             ente-auth-firefox-${{ steps.version.outputs.version }}.zip
