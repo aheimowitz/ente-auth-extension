@@ -19,24 +19,21 @@ A browser extension for Ente Auth that provides secure 2FA code autofill.
 
 1. Download the latest release for your browser from the [Releases page](../../releases):
    - **Chrome**: `ente-auth-chrome-x.x.x.zip`
-   - **Firefox**: `ente-auth-firefox-x.x.x.zip`
-2. Extract the zip file
-3. Load the extension:
+   - **Firefox**: `ente-auth-firefox-x.x.x.xpi` (recommended) or `.zip`
+2. Install the extension:
 
    **Chrome:**
-   1. Open `chrome://extensions`
-   2. Enable "Developer mode" (toggle in top right)
-   3. Click "Load unpacked"
-   4. Select the extracted folder
+   1. Extract the zip file
+   2. Open `chrome://extensions`
+   3. Enable "Developer mode" (toggle in top right)
+   4. Click "Load unpacked"
+   5. Select the extracted folder
 
    **Firefox:**
-   1. Open `about:debugging#/runtime/this-firefox`
-   2. Click "Load Temporary Add-on"
-   3. Select the `manifest.json` file in the extracted folder
+   1. Open the `.xpi` file in Firefox - it will prompt you to install
+   2. Click "Add" to install the extension
 
-> **Note**: Firefox temporary add-ons are removed when you close the browser. For
-> persistent installation, you can use
-> [web-ext](https://extensionworkshop.com/documentation/develop/getting-started-with-web-ext/).
+   > The `.xpi` file is signed by Mozilla and installs permanently. If you use the `.zip` instead, you'll need to load it as a temporary add-on via `about:debugging`, and it will be removed when Firefox closes.
 
 ### From Source
 

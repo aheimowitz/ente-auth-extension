@@ -1,7 +1,7 @@
 {
     "manifest_version": 2,
     "name": "Ente Auth Extension",
-    "version": "0.1.3",
+    "version": "0.1.4",
     "description": "Secure 2FA autofill from your Ente Auth vault",
     "permissions": [
         "storage",
@@ -50,8 +50,11 @@
     },
     "browser_specific_settings": {
         "gecko": {
-            "id": "auth@ente.io",
-            "strict_min_version": "109.0"
+            "id": "ente-auth-extension@adamheimowitz.com",
+            "strict_min_version": "109.0",
+            "data_collection_permissions": {
+                "required": ["none"]
+            }
         }
     },
     "content_security_policy": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",
