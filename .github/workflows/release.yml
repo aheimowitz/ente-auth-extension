@@ -50,10 +50,20 @@ jobs:
           cd dist-chrome
           zip -r ../ente-auth-chrome-${{ steps.version.outputs.version }}.zip .
 
-      - name: Create Firefox zip
+      - name: Create Firefox zip (unsigned)
         run: |
           cd dist-firefox
           zip -r ../ente-auth-firefox-${{ steps.version.outputs.version }}.zip .
+
+      - name: Sign Firefox extension
+        if: ${{ env.AMO_JWT_ISSUER != '' }}
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          npm install -g web-ext
+          web-ext sign --source-dir=dist-firefox --channel=unlisted --api-key=$AMO_JWT_ISSUER --api-secret=$AMO_JWT_SECRET
+          mv web-ext-artifacts/*.xpi ente-auth-firefox-${{ steps.version.outputs.version }}.xpi
 
       - name: Generate Release Notes
         id: release_notes
@@ -82,8 +92,10 @@ jobs:
           name: v${{ steps.version.outputs.version }}
           tag_name: v${{ steps.version.outputs.version }}
           body: ${{ steps.release_notes.outputs.notes }}
+          fail_on_unmatched_files: false
           files: |
             ente-auth-chrome-${{ steps.version.outputs.version }}.zip
             ente-auth-firefox-${{ steps.version.outputs.version }}.zip
+            ente-auth-firefox-${{ steps.version.outputs.version }}.xpi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
