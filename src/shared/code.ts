@@ -3,7 +3,7 @@
  * Ported from apps/auth/src/services/code.ts.
  */
 import { z } from "zod";
-import type { Code, CodeDisplay } from "./types";
+import type { Code, CodeDisplay, CodeFormData } from "./types";
 
 const nullToUndefined = <T>(val: T | null | undefined): T | undefined =>
     val === null ? undefined : val;
@@ -12,6 +12,7 @@ const CodeDisplaySchema = z.object({
     trashed: z.boolean().nullish().transform(nullToUndefined),
     pinned: z.boolean().nullish().transform(nullToUndefined),
     note: z.string().nullish().transform(nullToUndefined),
+    tags: z.array(z.string()).nullish().transform(nullToUndefined),
 });
 
 /**
@@ -145,4 +146,68 @@ export const prettyFormatCode = (code: string): string => {
         return `${code.slice(0, 3)} ${code.slice(3)}`;
     }
     return code;
+};
+
+/**
+ * Validate a Base32 secret string.
+ * Base32 uses A-Z and 2-7, with optional padding (=).
+ * Spaces are allowed and will be stripped.
+ */
+export const isValidBase32 = (secret: string): boolean => {
+    // Remove spaces and convert to uppercase
+    const cleaned = secret.replace(/\s/g, "").toUpperCase();
+    // Must have at least 16 characters (minimum for TOTP)
+    if (cleaned.length < 16) {
+        return false;
+    }
+    // Only allow valid Base32 characters (A-Z, 2-7, =)
+    return /^[A-Z2-7]+=*$/.test(cleaned);
+};
+
+/**
+ * Convert code form data to an OTP URI string.
+ * Inverse of codeFromURIString.
+ */
+export const codeToURIString = (data: CodeFormData): string => {
+    // Build the label: issuer:account or just issuer if no account
+    const label = data.account
+        ? `${encodeURIComponent(data.issuer)}:${encodeURIComponent(data.account)}`
+        : encodeURIComponent(data.issuer);
+
+    // Build the base URL
+    const url = new URL(`otpauth://${data.type}/${label}`);
+
+    // Add required secret parameter (normalize: uppercase, no spaces)
+    url.searchParams.set("secret", data.secret.replace(/\s/g, "").toUpperCase());
+
+    // Add issuer (required for compatibility)
+    url.searchParams.set("issuer", data.issuer);
+
+    // Add algorithm if not default (sha1)
+    if (data.algorithm !== "sha1") {
+        url.searchParams.set("algorithm", data.algorithm.toUpperCase());
+    }
+
+    // Add digits if not default (6, or 5 for steam)
+    const defaultDigits = data.type === "steam" ? 5 : 6;
+    if (data.digits !== defaultDigits) {
+        url.searchParams.set("digits", String(data.digits));
+    }
+
+    // Add period if not default (30)
+    if (data.period !== 30) {
+        url.searchParams.set("period", String(data.period));
+    }
+
+    // Add counter for HOTP
+    if (data.type === "hotp" && data.counter !== undefined) {
+        url.searchParams.set("counter", String(data.counter));
+    }
+
+    // Add codeDisplay if present
+    if (data.codeDisplay) {
+        url.searchParams.set("codeDisplay", JSON.stringify(data.codeDisplay));
+    }
+
+    return url.toString();
 };

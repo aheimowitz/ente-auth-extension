@@ -173,3 +173,44 @@ export const boxSealOpenBytes = async (
         await fromB64(keyPair.privateKey)
     );
 };
+
+/**
+ * Encrypt data using secretstream (Blob encryption).
+ * Inverse of decryptBlobBytes.
+ */
+export const encryptBlobBytes = async (
+    data: BytesOrB64,
+    key: BytesOrB64
+): Promise<{ encryptedData: string; decryptionHeader: string }> => {
+    await sodium.ready;
+    const keyBytes = await bytes(key);
+    const dataBytes = await bytes(data);
+
+    const { state, header } =
+        sodium.crypto_secretstream_xchacha20poly1305_init_push(keyBytes);
+
+    const encryptedData = sodium.crypto_secretstream_xchacha20poly1305_push(
+        state,
+        dataBytes,
+        null,
+        sodium.crypto_secretstream_xchacha20poly1305_TAG_FINAL
+    );
+
+    return {
+        encryptedData: await toB64(encryptedData),
+        decryptionHeader: await toB64(header),
+    };
+};
+
+/**
+ * Encrypt JSON metadata as a blob.
+ * Inverse of decryptMetadataJSON.
+ */
+export const encryptMetadataJSON = async (
+    data: unknown,
+    key: BytesOrB64
+): Promise<{ encryptedData: string; decryptionHeader: string }> => {
+    const jsonString = JSON.stringify(data);
+    const jsonBytes = new TextEncoder().encode(jsonString);
+    return encryptBlobBytes(jsonBytes, key);
+};

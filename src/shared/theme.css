@@ -14,6 +14,7 @@
     --text-faint: rgba(255, 255, 255, 0.50);
     --fill-muted: rgba(255, 255, 255, 0.16);
     --fill-faint: rgba(255, 255, 255, 0.12);
+    --fill-base: rgba(255, 255, 255, 0.24);
     --stroke: rgba(255, 255, 255, 0.12);
 
     /* Fixed colors (both themes) */
@@ -23,8 +24,12 @@
     --warning-yellow: #FFC247;
     --error-red: #F53434;
 
-    /* Legacy support */
-    --pin-ribbon-bg: #390c4f;
+    /* FAB colors - matches Ente Auth app */
+    --fab-background: #FFFFFF;
+    --fab-foreground: #282828;
+
+    /* Pin indicator background */
+    --pin-bg: #390c4f;
 }
 
 /* Light theme */
@@ -37,6 +42,7 @@
     --text-faint: rgba(0, 0, 0, 0.50);
     --fill-muted: rgba(0, 0, 0, 0.12);
     --fill-faint: rgba(0, 0, 0, 0.04);
+    --fill-base: rgba(0, 0, 0, 0.18);
     --stroke: rgba(0, 0, 0, 0.12);
 
     /* Fixed colors remain the same */
@@ -46,6 +52,10 @@
     --warning-yellow: #FFC247;
     --error-red: #F53434;
 
-    /* Legacy support */
-    --pin-ribbon-bg: #e8d5f0;
+    /* FAB colors - matches Ente Auth app */
+    --fab-background: #282828;
+    --fab-foreground: #FFFFFF;
+
+    /* Pin indicator background */
+    --pin-bg: #f9ecff;
 }

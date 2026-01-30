@@ -1,15 +1,16 @@
 /**
  * Extension popup main application component.
  */
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { sendMessage, openOptionsPage } from "@shared/browser";
 import { searchCodes } from "@shared/domain-matcher";
 import { generateOTPs } from "@shared/otp";
 import { useTheme } from "@shared/useTheme";
-import type { AuthState, Code } from "@shared/types";
+import type { AuthState, Code, CodeFormData, ParsedQRCode } from "@shared/types";
 import { CodeCard } from "./CodeCard";
+import { CodeForm } from "./CodeForm";
 
-type View = "loading" | "login" | "unlock" | "codes";
+type View = "loading" | "login" | "unlock" | "codes" | "add" | "edit";
 
 export const App: React.FC = () => {
     // Initialize theme
@@ -28,6 +29,46 @@ export const App: React.FC = () => {
     const [syncing, setSyncing] = useState(false);
     const [loggingIn, setLoggingIn] = useState(false);
     const [otps, setOtps] = useState<Map<string, { otp: string; nextOtp: string }>>(new Map());
+    const [showFabMenu, setShowFabMenu] = useState(false);
+    const [editingCode, setEditingCode] = useState<Code | null>(null);
+    const [deleteConfirm, setDeleteConfirm] = useState<Code | null>(null);
+    const [formInitialData, setFormInitialData] = useState<Partial<Code> | undefined>(undefined);
+    const [scanError, setScanError] = useState<string | null>(null);
+    const [selectedTag, setSelectedTag] = useState<string>("");
+    const [allTags, setAllTags] = useState<string[]>([]);
+    const [tagMenuOpen, setTagMenuOpen] = useState<string | null>(null);
+    const [editingTagName, setEditingTagName] = useState<string | null>(null);
+    const [editTagValue, setEditTagValue] = useState("");
+    const [deleteTagConfirm, setDeleteTagConfirm] = useState<string | null>(null);
+    const [recentlyPinnedId, setRecentlyPinnedId] = useState<string | null>(null);
+    const [exitingPinId, setExitingPinId] = useState<string | null>(null);
+    const [canScrollLeft, setCanScrollLeft] = useState(false);
+    const [canScrollRight, setCanScrollRight] = useState(false);
+    const tagFilterRef = useRef<HTMLDivElement>(null);
+
+    // Check if tag filter bar can scroll
+    const checkTagScroll = useCallback(() => {
+        const el = tagFilterRef.current;
+        if (!el) return;
+        setCanScrollLeft(el.scrollLeft > 0);
+        setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 1);
+    }, []);
+
+    // Update scroll state when tags change
+    useEffect(() => {
+        checkTagScroll();
+    }, [allTags, checkTagScroll]);
+
+    // Scroll tag filter bar
+    const scrollTags = (direction: "left" | "right") => {
+        const el = tagFilterRef.current;
+        if (!el) return;
+        const scrollAmount = 100;
+        el.scrollBy({
+            left: direction === "left" ? -scrollAmount : scrollAmount,
+            behavior: "smooth",
+        });
+    };
 
     // Check auth state on mount with retry logic for MV3 service worker wake-up
     useEffect(() => {
@@ -42,7 +83,6 @@ export const App: React.FC = () => {
                 if (!response.success || !response.data) {
                     // Retry if we got an error (service worker might be waking up)
                     if (retries > 0 && response.error) {
-                        console.log(`Auth check failed, retrying... (${retries} left)`);
                         await new Promise(r => setTimeout(r, 100));
                         return checkAuth(retries - 1);
                     }
@@ -61,13 +101,13 @@ export const App: React.FC = () => {
                     setView("codes");
                 }
             } catch (e) {
-                console.error("Failed to check auth:", e);
                 // Retry on exception (service worker might be waking up)
                 if (retries > 0) {
-                    console.log(`Auth check exception, retrying... (${retries} left)`);
                     await new Promise(r => setTimeout(r, 100));
                     return checkAuth(retries - 1);
                 }
+                // Only log error after all retries exhausted
+                console.error("Failed to check auth:", e);
                 setView("login");
             }
         };
@@ -87,6 +127,13 @@ export const App: React.FC = () => {
                 setCodes(response.data.codes);
                 setFilteredCodes(response.data.codes);
                 setTimeOffset(response.data.timeOffset);
+
+                // Extract all unique tags
+                const tags = new Set<string>();
+                response.data.codes.forEach((code) => {
+                    code.codeDisplay?.tags?.forEach((tag) => tags.add(tag));
+                });
+                setAllTags(Array.from(tags).sort());
             }
         } catch (e) {
             console.error("Failed to load codes:", e);
@@ -114,14 +161,29 @@ export const App: React.FC = () => {
         return () => clearInterval(interval);
     }, [view, filteredCodes, timeOffset]);
 
-    // Filter and sort codes when search query or sort order changes
+    // Filter and sort codes when search query, tag, or sort order changes
     useEffect(() => {
         let result = searchQuery.trim()
             ? searchCodes(codes, searchQuery)
             : [...codes];
 
-        // Apply sorting
+        // Filter by selected tag
+        if (selectedTag) {
+            result = result.filter((code) =>
+                code.codeDisplay?.tags?.includes(selectedTag)
+            );
+        }
+
+        // Apply sorting (pinned codes always first)
         result.sort((a, b) => {
+            // Pinned codes come first
+            const aPinned = a.codeDisplay?.pinned ? 1 : 0;
+            const bPinned = b.codeDisplay?.pinned ? 1 : 0;
+            if (aPinned !== bPinned) {
+                return bPinned - aPinned; // Pinned first
+            }
+
+            // Then apply regular sort order
             switch (sortOrder) {
                 case "issuer":
                     return a.issuer.localeCompare(b.issuer);
@@ -136,7 +198,7 @@ export const App: React.FC = () => {
         });
 
         setFilteredCodes(result);
-    }, [searchQuery, codes, sortOrder]);
+    }, [searchQuery, codes, sortOrder, selectedTag]);
 
     // Handle unlock
     const handleUnlock = async () => {
@@ -241,6 +303,291 @@ export const App: React.FC = () => {
         }
     };
 
+    // Handle add manually
+    const handleAddManually = () => {
+        setShowFabMenu(false);
+        setFormInitialData(undefined);
+        setView("add");
+    };
+
+    // Handle scan QR
+    const handleScanQR = async () => {
+        setShowFabMenu(false);
+        setScanError(null);
+
+        try {
+            const response = await sendMessage<{
+                success: boolean;
+                data?: ParsedQRCode;
+                error?: string;
+            }>({ type: "SCAN_QR_FROM_PAGE" });
+
+            if (response.success && response.data) {
+                // Pre-fill form with scanned data
+                setFormInitialData({
+                    issuer: response.data.issuer,
+                    account: response.data.account,
+                    secret: response.data.secret,
+                    type: response.data.type,
+                    algorithm: response.data.algorithm,
+                    length: response.data.digits,
+                    period: response.data.period,
+                    counter: response.data.counter,
+                });
+                setView("add");
+            } else {
+                setScanError(response.error || "Failed to scan QR code");
+            }
+        } catch (e) {
+            setScanError(e instanceof Error ? e.message : "Failed to scan QR code");
+        }
+    };
+
+    // Handle edit code
+    const handleEditCode = (code: Code) => {
+        setEditingCode(code);
+        setFormInitialData(code);
+        setView("edit");
+    };
+
+    // Handle pin/unpin code (two-phase animation: exit, then enter at new position)
+    const handlePinCode = async (code: Code) => {
+        // Don't allow re-pinning while animating
+        if (exitingPinId) return;
+
+        const newPinned = !code.codeDisplay?.pinned;
+        const updatedCodeDisplay = {
+            ...code.codeDisplay,
+            pinned: newPinned || undefined, // Remove if false
+        };
+
+        const updatedCode: Code = {
+            ...code,
+            codeDisplay: Object.keys(updatedCodeDisplay).some(
+                (k) => updatedCodeDisplay[k as keyof typeof updatedCodeDisplay] !== undefined
+            )
+                ? updatedCodeDisplay
+                : undefined,
+        };
+
+        // Phase 1: Start exit animation at current position
+        setExitingPinId(code.id);
+
+        // Phase 2: After exit animation, update state to move card
+        setTimeout(() => {
+            setCodes((prevCodes) =>
+                prevCodes.map((c) => (c.id === code.id ? updatedCode : c))
+            );
+            setExitingPinId(null);
+            setRecentlyPinnedId(code.id);
+            setTimeout(() => setRecentlyPinnedId(null), 350);
+        }, 250); // Exit animation duration
+
+        // Sync with backend in the background
+        try {
+            const response = await sendMessage<{
+                success: boolean;
+                error?: string;
+            }>({
+                type: "UPDATE_CODE",
+                id: code.id,
+                code: {
+                    issuer: code.issuer,
+                    account: code.account,
+                    secret: code.secret,
+                    type: code.type,
+                    algorithm: code.algorithm,
+                    digits: code.length,
+                    period: code.period,
+                    counter: code.counter,
+                    codeDisplay: updatedCode.codeDisplay,
+                },
+            });
+
+            if (!response.success) {
+                // Revert on failure
+                setCodes((prevCodes) =>
+                    prevCodes.map((c) => (c.id === code.id ? code : c))
+                );
+                setError(response.error || "Failed to update pin status");
+            }
+        } catch (e) {
+            // Revert on error
+            setCodes((prevCodes) =>
+                prevCodes.map((c) => (c.id === code.id ? code : c))
+            );
+            setError(e instanceof Error ? e.message : "Failed to update pin status");
+        }
+    };
+
+    // Handle delete code (called from edit form)
+    const handleDeleteCode = (code: Code) => {
+        setDeleteConfirm(code);
+    };
+
+    // Confirm delete
+    const confirmDelete = async () => {
+        if (!deleteConfirm) return;
+
+        try {
+            const response = await sendMessage<{
+                success: boolean;
+                error?: string;
+            }>({ type: "DELETE_CODE", id: deleteConfirm.id });
+
+            if (response.success) {
+                setDeleteConfirm(null);
+                setEditingCode(null);
+                setFormInitialData(undefined);
+                await loadCodes();
+                setView("codes");
+            } else {
+                setError(response.error || "Failed to delete code");
+            }
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Failed to delete code");
+        }
+    };
+
+    // Handle save code (add or edit)
+    const handleSaveCode = async (data: CodeFormData) => {
+        if (view === "add") {
+            const response = await sendMessage<{
+                success: boolean;
+                error?: string;
+            }>({ type: "CREATE_CODE", code: data });
+
+            if (!response.success) {
+                throw new Error(response.error || "Failed to create code");
+            }
+        } else if (view === "edit" && editingCode) {
+            const response = await sendMessage<{
+                success: boolean;
+                error?: string;
+            }>({ type: "UPDATE_CODE", id: editingCode.id, code: data });
+
+            if (!response.success) {
+                throw new Error(response.error || "Failed to update code");
+            }
+        }
+
+        // Reload codes and go back to list
+        await loadCodes();
+        setView("codes");
+        setEditingCode(null);
+        setFormInitialData(undefined);
+    };
+
+    // Handle cancel form
+    const handleCancelForm = () => {
+        setView("codes");
+        setEditingCode(null);
+        setFormInitialData(undefined);
+        setScanError(null);
+    };
+
+    // Handle edit tag - rename tag across all codes
+    const handleEditTag = async () => {
+        if (!editingTagName || !editTagValue.trim()) return;
+
+        const newTagName = editTagValue.trim();
+        if (newTagName === editingTagName) {
+            setEditingTagName(null);
+            setEditTagValue("");
+            return;
+        }
+
+        try {
+            // Update all codes that have this tag
+            const codesToUpdate = codes.filter((code) =>
+                code.codeDisplay?.tags?.includes(editingTagName)
+            );
+
+            for (const code of codesToUpdate) {
+                const newTags = code.codeDisplay?.tags?.map((t) =>
+                    t === editingTagName ? newTagName : t
+                );
+
+                await sendMessage<{ success: boolean; error?: string }>({
+                    type: "UPDATE_CODE",
+                    id: code.id,
+                    code: {
+                        issuer: code.issuer,
+                        account: code.account,
+                        secret: code.secret,
+                        type: code.type,
+                        algorithm: code.algorithm,
+                        digits: code.length,
+                        period: code.period,
+                        counter: code.counter,
+                        codeDisplay: {
+                            ...code.codeDisplay,
+                            tags: newTags,
+                        },
+                    },
+                });
+            }
+
+            // Update selected tag if it was the one being edited
+            if (selectedTag === editingTagName) {
+                setSelectedTag(newTagName);
+            }
+
+            await loadCodes();
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Failed to rename tag");
+        } finally {
+            setEditingTagName(null);
+            setEditTagValue("");
+        }
+    };
+
+    // Handle delete tag - remove tag from all codes
+    const handleDeleteTag = async () => {
+        if (!deleteTagConfirm) return;
+
+        try {
+            // Update all codes that have this tag
+            const codesToUpdate = codes.filter((code) =>
+                code.codeDisplay?.tags?.includes(deleteTagConfirm)
+            );
+
+            for (const code of codesToUpdate) {
+                const newTags = code.codeDisplay?.tags?.filter((t) => t !== deleteTagConfirm);
+
+                await sendMessage<{ success: boolean; error?: string }>({
+                    type: "UPDATE_CODE",
+                    id: code.id,
+                    code: {
+                        issuer: code.issuer,
+                        account: code.account,
+                        secret: code.secret,
+                        type: code.type,
+                        algorithm: code.algorithm,
+                        digits: code.length,
+                        period: code.period,
+                        counter: code.counter,
+                        codeDisplay: {
+                            ...code.codeDisplay,
+                            tags: newTags && newTags.length > 0 ? newTags : undefined,
+                        },
+                    },
+                });
+            }
+
+            // Clear selected tag if it was the one being deleted
+            if (selectedTag === deleteTagConfirm) {
+                setSelectedTag("");
+            }
+
+            await loadCodes();
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Failed to delete tag");
+        } finally {
+            setDeleteTagConfirm(null);
+        }
+    };
+
     // Render loading state
     if (view === "loading") {
         return (
@@ -285,6 +632,53 @@ export const App: React.FC = () => {
                         {error && <div className="auth-error">{error}</div>}
                     </div>
                 </div>
+            </div>
+        );
+    }
+
+    // Render add/edit form
+    if (view === "add" || view === "edit") {
+        return (
+            <div className="popup-container">
+                <CodeForm
+                    mode={view}
+                    initialData={formInitialData as Code | undefined}
+                    allTags={allTags}
+                    onSave={handleSaveCode}
+                    onCancel={handleCancelForm}
+                    onDelete={view === "edit" && editingCode ? () => handleDeleteCode(editingCode) : undefined}
+                />
+
+                {/* Delete confirmation modal */}
+                {deleteConfirm && (
+                    <div className="modal-overlay" onClick={() => setDeleteConfirm(null)}>
+                        <div className="modal" onClick={(e) => e.stopPropagation()}>
+                            <div className="modal-title">Delete Code?</div>
+                            <div className="modal-message">
+                                Are you sure you want to delete the code for{" "}
+                                <strong>{deleteConfirm.issuer}</strong>
+                                {deleteConfirm.account && (
+                                    <> ({deleteConfirm.account})</>
+                                )}
+                                ? This cannot be undone.
+                            </div>
+                            <div className="modal-actions">
+                                <button
+                                    className="modal-button cancel"
+                                    onClick={() => setDeleteConfirm(null)}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    className="modal-button delete"
+                                    onClick={confirmDelete}
+                                >
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         );
     }
@@ -412,13 +806,96 @@ export const App: React.FC = () => {
                 </div>
             )}
 
+            {/* Tag filter bar */}
+            {allTags.length > 0 && (
+                <div className="tag-filter-container">
+                    {canScrollLeft && (
+                        <button
+                            className="tag-scroll-btn left"
+                            onClick={() => scrollTags("left")}
+                        >
+                            <ChevronLeftIcon />
+                        </button>
+                    )}
+                    <div
+                        className="tag-filter-bar"
+                        ref={tagFilterRef}
+                        onScroll={checkTagScroll}
+                    >
+                        <button
+                            className={`tag-chip ${selectedTag === "" ? "selected" : ""}`}
+                            onClick={() => setSelectedTag("")}
+                        >
+                            All
+                        </button>
+                        {allTags.map((tag) => (
+                            <button
+                                key={tag}
+                                className={`tag-chip ${selectedTag === tag ? "selected" : ""}`}
+                                onClick={() => setSelectedTag(selectedTag === tag ? "" : tag)}
+                            >
+                                {tag}
+                                {selectedTag === tag && (
+                                    <span
+                                        className="tag-menu-trigger"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setTagMenuOpen(tagMenuOpen === tag ? null : tag);
+                                        }}
+                                    >
+                                        <MoreIcon />
+                                    </span>
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                    {canScrollRight && (
+                        <button
+                            className="tag-scroll-btn right"
+                            onClick={() => scrollTags("right")}
+                        >
+                            <ChevronRightIcon />
+                        </button>
+                    )}
+                </div>
+            )}
+
+            {/* Tag menu - rendered at root level to avoid z-index issues */}
+            {tagMenuOpen && (
+                <div className="tag-menu-overlay" onClick={() => setTagMenuOpen(null)}>
+                    <div className="tag-menu-popup" onClick={(e) => e.stopPropagation()}>
+                        <button
+                            className="tag-menu-item"
+                            onClick={() => {
+                                setEditingTagName(tagMenuOpen);
+                                setEditTagValue(tagMenuOpen);
+                                setTagMenuOpen(null);
+                            }}
+                        >
+                            <EditSmallIcon />
+                            Edit
+                        </button>
+                        <button
+                            className="tag-menu-item delete"
+                            onClick={() => {
+                                setDeleteTagConfirm(tagMenuOpen);
+                                setTagMenuOpen(null);
+                            }}
+                        >
+                            <TrashSmallIcon />
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            )}
+
             <div className="codes-list">
                 {filteredCodes.length === 0 ? (
                     <div className="empty-state">
                         <div className="empty-state-icon">🔐</div>
                         <div className="empty-state-text">
                             {codes.length === 0
-                                ? "No codes yet. Add codes in the Ente Auth app."
+                                ? "No codes yet. Click + to add one."
                                 : "No codes match your search."}
                         </div>
                     </div>
@@ -428,18 +905,162 @@ export const App: React.FC = () => {
                             otp: "",
                             nextOtp: "",
                         };
+                        const isExiting = exitingPinId === code.id;
+                        const justMoved = recentlyPinnedId === code.id;
                         return (
-                            <CodeCard
+                            <div
                                 key={code.id}
-                                code={code}
-                                timeOffset={timeOffset}
-                                otp={otpData.otp}
-                                nextOtp={otpData.nextOtp}
-                            />
+                                className={`code-card-wrapper ${isExiting ? "exiting" : ""} ${justMoved ? "just-moved" : ""}`}
+                            >
+                                <CodeCard
+                                    code={code}
+                                    timeOffset={timeOffset}
+                                    otp={otpData.otp}
+                                    nextOtp={otpData.nextOtp}
+                                    onEdit={handleEditCode}
+                                    onPin={handlePinCode}
+                                />
+                            </div>
                         );
                     })
                 )}
             </div>
+
+            {/* Floating Action Button */}
+            <div className="fab-container">
+                {showFabMenu && (
+                    <div className="fab-menu">
+                        <button
+                            className="fab-menu-item"
+                            onClick={handleAddManually}
+                        >
+                            <span className="menu-label">Enter details manually</span>
+                            <span className="menu-icon"><KeyboardIcon /></span>
+                        </button>
+                        <button
+                            className="fab-menu-item"
+                            onClick={handleScanQR}
+                        >
+                            <span className="menu-label">Scan a QR code</span>
+                            <span className="menu-icon"><QRIcon /></span>
+                        </button>
+                    </div>
+                )}
+                <button
+                    className={`fab ${showFabMenu ? "active" : ""}`}
+                    onClick={() => setShowFabMenu(!showFabMenu)}
+                    title="Add code"
+                >
+                    <PlusIcon />
+                </button>
+            </div>
+
+            {/* Scan error toast */}
+            {scanError && (
+                <div className="scan-error-toast">
+                    <span>{scanError}</span>
+                    <button onClick={() => setScanError(null)}>×</button>
+                </div>
+            )}
+
+            {/* Delete confirmation modal */}
+            {deleteConfirm && (
+                <div className="modal-overlay" onClick={() => setDeleteConfirm(null)}>
+                    <div className="modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-title">Delete Code?</div>
+                        <div className="modal-message">
+                            Are you sure you want to delete the code for{" "}
+                            <strong>{deleteConfirm.issuer}</strong>
+                            {deleteConfirm.account && (
+                                <> ({deleteConfirm.account})</>
+                            )}
+                            ? This cannot be undone.
+                        </div>
+                        <div className="modal-actions">
+                            <button
+                                className="modal-button cancel"
+                                onClick={() => setDeleteConfirm(null)}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className="modal-button delete"
+                                onClick={confirmDelete}
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit tag modal */}
+            {editingTagName && (
+                <div className="modal-overlay" onClick={() => { setEditingTagName(null); setEditTagValue(""); }}>
+                    <div className="modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-title">Rename Tag</div>
+                        <div className="modal-field">
+                            <input
+                                type="text"
+                                className="modal-input"
+                                value={editTagValue}
+                                onChange={(e) => setEditTagValue(e.target.value)}
+                                placeholder="Tag name"
+                                autoFocus
+                                maxLength={100}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                        handleEditTag();
+                                    }
+                                }}
+                            />
+                        </div>
+                        <div className="modal-actions">
+                            <button
+                                className="modal-button cancel"
+                                onClick={() => { setEditingTagName(null); setEditTagValue(""); }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className="modal-button save"
+                                onClick={handleEditTag}
+                                disabled={!editTagValue.trim()}
+                            >
+                                Save
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete tag confirmation modal */}
+            {deleteTagConfirm && (
+                <div className="modal-overlay" onClick={() => setDeleteTagConfirm(null)}>
+                    <div className="modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-title">Delete Tag?</div>
+                        <div className="modal-message">
+                            Are you sure you want to delete the tag{" "}
+                            <strong>"{deleteTagConfirm}"</strong>?
+                            This will remove the tag from all codes.
+                        </div>
+                        <div className="modal-actions">
+                            <button
+                                className="modal-button cancel"
+                                onClick={() => setDeleteTagConfirm(null)}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className="modal-button delete"
+                                onClick={handleDeleteTag}
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -495,5 +1116,88 @@ const SearchIcon: React.FC = () => (
 const CheckIcon: React.FC = () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="20 6 9 17 4 12" />
+    </svg>
+);
+
+// Check icon small (for tag chips)
+const CheckSmallIcon: React.FC = () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="20 6 9 17 4 12" />
+    </svg>
+);
+
+// Plus icon for FAB
+const PlusIcon: React.FC = () => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="12" y1="5" x2="12" y2="19" />
+        <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+);
+
+// QR code icon
+const QRIcon: React.FC = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="7" height="7" />
+        <rect x="14" y="3" width="7" height="7" />
+        <rect x="3" y="14" width="7" height="7" />
+        <rect x="14" y="14" width="3" height="3" />
+        <rect x="18" y="14" width="3" height="3" />
+        <rect x="14" y="18" width="3" height="3" />
+        <rect x="18" y="18" width="3" height="3" />
+    </svg>
+);
+
+// Keyboard icon (for manual entry)
+const KeyboardIcon: React.FC = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
+        <line x1="6" y1="8" x2="6" y2="8" />
+        <line x1="10" y1="8" x2="10" y2="8" />
+        <line x1="14" y1="8" x2="14" y2="8" />
+        <line x1="18" y1="8" x2="18" y2="8" />
+        <line x1="6" y1="12" x2="6" y2="12" />
+        <line x1="10" y1="12" x2="10" y2="12" />
+        <line x1="14" y1="12" x2="14" y2="12" />
+        <line x1="18" y1="12" x2="18" y2="12" />
+        <line x1="7" y1="16" x2="17" y2="16" />
+    </svg>
+);
+
+// More icon (3 dots) for tag menu
+const MoreIcon: React.FC = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <circle cx="12" cy="6" r="2" />
+        <circle cx="12" cy="12" r="2" />
+        <circle cx="12" cy="18" r="2" />
+    </svg>
+);
+
+// Edit icon small (for tag menu)
+const EditSmallIcon: React.FC = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+);
+
+// Trash icon small (for tag menu)
+const TrashSmallIcon: React.FC = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="3 6 5 6 21 6" />
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </svg>
+);
+
+// Chevron left icon (for tag scroll)
+const ChevronLeftIcon: React.FC = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="15 18 9 12 15 6" />
+    </svg>
+);
+
+// Chevron right icon (for tag scroll)
+const ChevronRightIcon: React.FC = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="9 18 15 12 9 6" />
     </svg>
 );

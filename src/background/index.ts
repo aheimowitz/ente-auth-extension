@@ -13,12 +13,26 @@ import type {
 } from "@shared/types";
 import { getAuthState, login, logout, unlock } from "./auth";
 import { settingsStorage, authStorage, customMappingsStorage } from "./storage";
-import { getCodes, getTimeOffset, syncCodes } from "./sync";
+import { getCodes, getTimeOffset, syncCodes, createCode, updateCode, deleteCode } from "./sync";
+import { scanQRFromPage } from "./qr-scanner";
 
 const SYNC_ALARM_NAME = "ente-auth-sync";
 
+// Register message listener immediately (synchronously) so it's available
+// as soon as the service worker starts. This prevents "Receiving end does not exist"
+// errors when the service worker is woken up by a message.
+onMessage((message, sender, sendResponse) => {
+    handleMessage(message as ExtensionMessage, sender)
+        .then(sendResponse)
+        .catch((error) => {
+            console.error("Message handler error:", error);
+            sendResponse({ success: false, error: error.message });
+        });
+    return true; // Keep message channel open for async response
+});
+
 /**
- * Initialize the background script.
+ * Initialize the background script (async tasks like alarms).
  */
 const init = async () => {
     console.log("Ente Auth extension background script initialized");
@@ -37,17 +51,6 @@ const init = async () => {
                 console.error("Sync alarm failed:", e);
             }
         }
-    });
-
-    // Handle messages from popup and content scripts
-    onMessage((message, sender, sendResponse) => {
-        handleMessage(message as ExtensionMessage, sender)
-            .then(sendResponse)
-            .catch((error) => {
-                console.error("Message handler error:", error);
-                sendResponse({ success: false, error: error.message });
-            });
-        return true; // Keep message channel open for async response
     });
 };
 
@@ -309,6 +312,56 @@ const handleMessage = async (
                     error: e instanceof Error ? e.message : "Failed to delete mapping",
                 };
             }
+        }
+
+        case "CREATE_CODE": {
+            try {
+                const result = await createCode(message.code);
+                // Re-sync to get the new code in the cache
+                await syncCodes();
+                return { success: true, data: result };
+            } catch (e) {
+                return {
+                    success: false,
+                    error: e instanceof Error ? e.message : "Failed to create code",
+                };
+            }
+        }
+
+        case "UPDATE_CODE": {
+            try {
+                await updateCode(message.id, message.code);
+                // Re-sync to get the updated code in the cache
+                await syncCodes();
+                return { success: true };
+            } catch (e) {
+                return {
+                    success: false,
+                    error: e instanceof Error ? e.message : "Failed to update code",
+                };
+            }
+        }
+
+        case "DELETE_CODE": {
+            try {
+                await deleteCode(message.id);
+                // Re-sync to remove the code from the cache
+                await syncCodes();
+                return { success: true };
+            } catch (e) {
+                return {
+                    success: false,
+                    error: e instanceof Error ? e.message : "Failed to delete code",
+                };
+            }
+        }
+
+        case "SCAN_QR_FROM_PAGE": {
+            const result = await scanQRFromPage();
+            if (result.success) {
+                return { success: true, data: result.data };
+            }
+            return { success: false, error: result.error || "Failed to scan QR code" };
         }
 
         default:

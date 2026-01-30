@@ -46,6 +46,8 @@ export interface CodeDisplay {
     pinned?: boolean;
     /** User-provided note or description for this code. */
     note?: string;
+    /** Tags for organizing codes. */
+    tags?: string[];
 }
 
 /**
@@ -87,6 +89,36 @@ export const defaultSettings: ExtensionSettings = {
 };
 
 /**
+ * Form data for creating/updating a code.
+ */
+export interface CodeFormData {
+    issuer: string;
+    account?: string;
+    secret: string;
+    type: "totp" | "hotp" | "steam";
+    algorithm: "sha1" | "sha256" | "sha512";
+    digits: number;
+    period: number;
+    counter?: number;
+    codeDisplay?: CodeDisplay;
+}
+
+/**
+ * Parsed QR code data.
+ */
+export interface ParsedQRCode {
+    uri: string;
+    issuer: string;
+    account?: string;
+    secret: string;
+    type: "totp" | "hotp" | "steam";
+    algorithm: "sha1" | "sha256" | "sha512";
+    digits: number;
+    period: number;
+    counter?: number;
+}
+
+/**
  * Message types for communication between extension components.
  */
 export type ExtensionMessage =
@@ -105,7 +137,11 @@ export type ExtensionMessage =
     | { type: "FILL_CODE"; code: string; tabId: number }
     | { type: "GET_CUSTOM_MAPPINGS" }
     | { type: "ADD_CUSTOM_MAPPING"; mapping: Omit<CustomDomainMapping, "createdAt"> }
-    | { type: "DELETE_CUSTOM_MAPPING"; domain: string };
+    | { type: "DELETE_CUSTOM_MAPPING"; domain: string }
+    | { type: "CREATE_CODE"; code: CodeFormData }
+    | { type: "UPDATE_CODE"; id: string; code: CodeFormData }
+    | { type: "DELETE_CODE"; id: string }
+    | { type: "SCAN_QR_FROM_PAGE" };
 
 /**
  * Credentials captured from web login.

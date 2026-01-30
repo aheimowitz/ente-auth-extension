@@ -1,8 +1,16 @@
 /**
  * Sync module for fetching and caching auth codes.
  */
-import { getAuthCodes } from "@shared/api";
-import type { Code } from "@shared/types";
+import {
+    getAuthCodes,
+    getAuthenticatorEntityKey,
+    createAuthenticatorEntity,
+    updateAuthenticatorEntity,
+    deleteAuthenticatorEntity,
+} from "@shared/api";
+import { codeToURIString } from "@shared/code";
+import { decryptBox, encryptMetadataJSON } from "@shared/crypto";
+import type { Code, CodeFormData } from "@shared/types";
 import { getToken, getMasterKey, isUnlocked } from "./auth";
 import { codesStorage, settingsStorage } from "./storage";
 
@@ -87,4 +95,105 @@ export const getCodes = async (forceSync = false): Promise<Code[]> => {
  */
 export const getTimeOffset = async (): Promise<number> => {
     return codesStorage.getTimeOffset();
+};
+
+/**
+ * Get the decrypted authenticator key.
+ * Returns undefined if not logged in or key not available.
+ */
+export const getAuthenticatorKey = async (): Promise<string | undefined> => {
+    const token = await getToken();
+    const masterKey = await getMasterKey();
+
+    if (!token || !masterKey) {
+        return undefined;
+    }
+
+    const entityKey = await getAuthenticatorEntityKey(token);
+    if (!entityKey) {
+        return undefined;
+    }
+
+    return decryptBox(
+        {
+            encryptedData: entityKey.encryptedKey,
+            nonce: entityKey.header,
+        },
+        masterKey
+    );
+};
+
+/**
+ * Create a new code.
+ */
+export const createCode = async (
+    formData: CodeFormData
+): Promise<{ id: string }> => {
+    const token = await getToken();
+    const authenticatorKey = await getAuthenticatorKey();
+
+    if (!token || !authenticatorKey) {
+        throw new Error("Not authenticated");
+    }
+
+    // Build the URI string from form data
+    const uriString = codeToURIString(formData);
+
+    // Encrypt the URI string
+    const { encryptedData, decryptionHeader } = await encryptMetadataJSON(
+        uriString,
+        authenticatorKey
+    );
+
+    // Create the entity
+    const result = await createAuthenticatorEntity(token, {
+        encryptedData,
+        header: decryptionHeader,
+    });
+
+    return result;
+};
+
+/**
+ * Update an existing code.
+ */
+export const updateCode = async (
+    id: string,
+    formData: CodeFormData
+): Promise<void> => {
+    const token = await getToken();
+    const authenticatorKey = await getAuthenticatorKey();
+
+    if (!token || !authenticatorKey) {
+        throw new Error("Not authenticated");
+    }
+
+    // Build the URI string from form data
+    const uriString = codeToURIString(formData);
+
+    // Encrypt the URI string
+    const { encryptedData, decryptionHeader } = await encryptMetadataJSON(
+        uriString,
+        authenticatorKey
+    );
+
+    // Update the entity
+    await updateAuthenticatorEntity(token, {
+        id,
+        encryptedData,
+        header: decryptionHeader,
+    });
+};
+
+/**
+ * Delete a code.
+ */
+export const deleteCode = async (id: string): Promise<void> => {
+    const token = await getToken();
+
+    if (!token) {
+        throw new Error("Not authenticated");
+    }
+
+    await deleteAuthenticatorEntity(token, id);
 };

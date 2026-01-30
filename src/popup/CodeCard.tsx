@@ -12,6 +12,8 @@ interface CodeCardProps {
     timeOffset: number;
     otp: string;
     nextOtp: string;
+    onEdit?: (code: Code) => void;
+    onPin?: (code: Code) => void;
 }
 
 export const CodeCard: React.FC<CodeCardProps> = ({
@@ -19,6 +21,8 @@ export const CodeCard: React.FC<CodeCardProps> = ({
     timeOffset,
     otp,
     nextOtp,
+    onEdit,
+    onPin,
 }) => {
     const [copied, setCopied] = useState(false);
     const progressBarRef = useRef<HTMLDivElement>(null);
@@ -120,16 +124,13 @@ export const CodeCard: React.FC<CodeCardProps> = ({
                 className={`code-progress-bar ${isWarning ? "warning" : ""}`}
             />
 
-            {/* Pin indicator */}
+            {/* Pin indicator - subtle corner triangle */}
             {code.codeDisplay?.pinned && (
-                <>
-                    <div className="pin-ribbon" />
-                    <span className="pin-icon">
-                        <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
-                            <path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z" />
-                        </svg>
-                    </span>
-                </>
+                <div className="pin-indicator">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z" />
+                    </svg>
+                </div>
             )}
 
             {/* Card content */}
@@ -145,8 +146,67 @@ export const CodeCard: React.FC<CodeCardProps> = ({
                 </div>
             </div>
 
+            {/* Action buttons (visible on hover) */}
+            {(onEdit || onPin) && (
+                <div className="code-actions">
+                    {onPin && (
+                        <button
+                            className={`code-action-button ${code.codeDisplay?.pinned ? "active" : ""}`}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onPin(code);
+                            }}
+                            title={code.codeDisplay?.pinned ? "Unpin" : "Pin"}
+                        >
+                            <PinIcon />
+                        </button>
+                    )}
+                    {onEdit && (
+                        <button
+                            className="code-action-button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onEdit(code);
+                            }}
+                            title="Edit"
+                        >
+                            <EditIcon />
+                        </button>
+                    )}
+                </div>
+            )}
+
             {/* Copied toast pill */}
             {copied && <div className="copied-pill">Copied</div>}
         </div>
     );
 };
+
+// Pin icon
+const PinIcon: React.FC = () => (
+    <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+    >
+        <path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z" />
+    </svg>
+);
+
+// Edit icon (pencil)
+const EditIcon: React.FC = () => (
+    <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+    >
+        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+);

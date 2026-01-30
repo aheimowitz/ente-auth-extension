@@ -3,7 +3,7 @@
  * Adapted from apps/auth/src/services/remote.ts.
  */
 import { z } from "zod";
-import type { AuthenticatorEntityKey, Code } from "./types";
+import type { AuthenticatorEntityKey, Code, EncryptedBlob } from "./types";
 import { codeFromURIString } from "./code";
 import { decryptBox, decryptMetadataJSON } from "./crypto";
 
@@ -28,7 +28,7 @@ export const buildApiUrl = (
 /**
  * Make an authenticated request.
  */
-const authenticatedFetch = async (
+export const authenticatedFetch = async (
     url: string,
     token: string,
     options?: RequestInit
@@ -235,4 +235,69 @@ export const getAuthCodes = async (
         });
 
     return { codes, timeOffset };
+};
+
+/**
+ * Request body for creating an authenticator entity.
+ */
+export interface CreateEntityRequest {
+    encryptedData: string;
+    header: string;
+}
+
+/**
+ * Request body for updating an authenticator entity.
+ */
+export interface UpdateEntityRequest {
+    id: string;
+    encryptedData: string;
+    header: string;
+}
+
+/**
+ * Create a new authenticator entity.
+ */
+export const createAuthenticatorEntity = async (
+    token: string,
+    request: CreateEntityRequest
+): Promise<{ id: string }> => {
+    const url = buildApiUrl("/authenticator/entity");
+    const response = await authenticatedFetch(url, token, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify(request),
+    });
+    return (await response.json()) as { id: string };
+};
+
+/**
+ * Update an existing authenticator entity.
+ */
+export const updateAuthenticatorEntity = async (
+    token: string,
+    request: UpdateEntityRequest
+): Promise<void> => {
+    const url = buildApiUrl("/authenticator/entity");
+    await authenticatedFetch(url, token, {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify(request),
+    });
+};
+
+/**
+ * Delete an authenticator entity.
+ */
+export const deleteAuthenticatorEntity = async (
+    token: string,
+    id: string
+): Promise<void> => {
+    const url = buildApiUrl("/authenticator/entity", { id });
+    await authenticatedFetch(url, token, {
+        method: "DELETE",
+    });
 };

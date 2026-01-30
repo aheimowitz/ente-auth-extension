@@ -8,8 +8,7 @@
 
 body {
     width: 380px;
-    min-height: 400px;
-    max-height: 520px;
+    height: 520px;
     background-color: var(--background);
     color: var(--text-primary);
     font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -27,7 +26,6 @@ body {
     display: flex;
     flex-direction: column;
     height: 100%;
-    min-height: 400px;
 }
 
 /* Header - matches desktop app */
@@ -194,10 +192,51 @@ body {
 .codes-list {
     flex: 1;
     overflow-y: auto;
-    padding: 0 16px 12px;
+    padding: 0 16px 80px; /* Extra bottom padding for FAB */
     display: flex;
     flex-direction: column;
     gap: 8px;
+}
+
+/* Code card wrapper for animations */
+.code-card-wrapper {
+    flex-shrink: 0;
+}
+
+/* Exit animation - card fades and shrinks before moving */
+.code-card-wrapper.exiting {
+    animation: cardExit 0.25s ease forwards;
+}
+
+@keyframes cardExit {
+    0% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    100% {
+        opacity: 0.3;
+        transform: scale(0.95);
+    }
+}
+
+/* Enter animation - card appears at new position */
+.code-card-wrapper.just-moved {
+    animation: cardEnter 0.3s ease;
+}
+
+@keyframes cardEnter {
+    0% {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    60% {
+        opacity: 1;
+        transform: scale(1.02);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
 }
 
 /* Code card - matches desktop app */
@@ -234,28 +273,38 @@ body {
     background-color: var(--warning-yellow);
 }
 
-/* Pin indicator */
-.pin-ribbon {
+/* Pin indicator - subtle triangle corner like mobile app */
+.pin-indicator {
     position: absolute;
-    top: -5px;
-    right: -41px;
-    width: 107px;
-    height: 26px;
-    background-color: var(--pin-ribbon-bg);
-    transform: rotate(43deg);
-    z-index: 0;
+    top: 0;
+    right: 0;
+    width: 28px;
+    height: 28px;
+    overflow: hidden;
+    z-index: 2;
+    pointer-events: none;
 }
 
-.pin-icon {
+.pin-indicator::before {
+    content: "";
     position: absolute;
-    top: 6px;
-    right: 5px;
+    top: 0;
+    right: 0;
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 0 28px 28px 0;
+    border-color: transparent var(--pin-bg) transparent transparent;
+}
+
+.pin-indicator svg {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 10px;
+    height: 10px;
     color: var(--accent-purple);
-    z-index: 1;
     transform: rotate(45deg);
-    display: flex;
-    align-items: center;
-    justify-content: center;
 }
 
 /* Card content layout - matches desktop */
@@ -390,7 +439,7 @@ body {
     justify-content: center;
     padding: 48px 24px;
     text-align: center;
-    min-height: 400px;
+    flex: 1;
 }
 
 .auth-logo {
@@ -511,4 +560,847 @@ body {
 
 .syncing {
     color: var(--accent-purple);
+}
+
+/* Code card action buttons */
+.code-actions {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 2;
+}
+
+.code-card:hover .code-actions {
+    opacity: 1;
+}
+
+.code-action-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 4px;
+    background-color: var(--fill-muted);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.code-action-button:hover {
+    background-color: var(--fill-base);
+    color: var(--text-primary);
+}
+
+.code-action-button.active {
+    background-color: var(--accent-purple);
+    color: #fff;
+}
+
+.code-action-button.active:hover {
+    background-color: var(--accent-purple-hover);
+}
+
+/* Floating Action Button (FAB) - Ente Auth style */
+.fab-container {
+    position: fixed;
+    bottom: 20px;
+    right: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 12px;
+    z-index: 100;
+}
+
+.fab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    border: none;
+    border-radius: 50%;
+    background-color: var(--fab-background);
+    color: var(--fab-foreground);
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    transition: all 0.2s;
+}
+
+.fab:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+
+.fab.active {
+    transform: rotate(45deg);
+}
+
+.fab.active:hover {
+    transform: rotate(45deg);
+}
+
+.fab svg {
+    transition: transform 0.2s;
+}
+
+/* FAB speed dial menu */
+.fab-menu {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    animation: fadeIn 0.15s ease;
+}
+
+.fab-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.fab-menu-item .menu-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background-color: var(--fab-background);
+    color: var(--fab-foreground);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+    transition: box-shadow 0.15s;
+}
+
+.fab-menu-item:hover .menu-icon {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.fab-menu-item .menu-label {
+    padding: 10px 14px;
+    background-color: var(--fab-background);
+    color: var(--fab-foreground);
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Code form */
+.code-form-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.form-header {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    background-color: var(--background);
+    border-bottom: 1px solid var(--stroke);
+}
+
+.back-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 4px;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.back-button:hover {
+    background-color: var(--fill-muted);
+    color: var(--text-primary);
+}
+
+.form-title {
+    flex: 1;
+    text-align: center;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.form-header-spacer {
+    width: 32px;
+}
+
+.code-form {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.form-field label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+.form-field input,
+.form-field select {
+    padding: 10px 12px;
+    background-color: var(--background-paper);
+    border: 1px solid var(--stroke);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 500;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.form-field input:focus,
+.form-field select:focus {
+    border-color: var(--accent-purple);
+}
+
+.form-field input:disabled,
+.form-field select:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.form-field input::placeholder {
+    color: var(--text-faint);
+}
+
+.secret-input-wrapper {
+    position: relative;
+    display: flex;
+}
+
+.secret-input-wrapper input {
+    flex: 1;
+    padding-right: 40px;
+}
+
+.secret-toggle {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 4px;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.15s;
+}
+
+.secret-toggle:hover {
+    color: var(--text-primary);
+}
+
+.field-error {
+    font-size: 12px;
+    color: var(--error-red);
+    font-weight: 500;
+}
+
+/* Tag filter container with scroll arrows */
+.tag-filter-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.tag-scroll-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 50%;
+    background-color: var(--background-paper);
+    color: var(--text-primary);
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: all 0.15s;
+}
+
+.tag-scroll-btn:hover {
+    background-color: var(--background-paper-2);
+}
+
+.tag-scroll-btn.left {
+    left: 4px;
+}
+
+.tag-scroll-btn.right {
+    right: 4px;
+}
+
+/* Tag filter bar (top of codes list) */
+.tag-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px 12px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    flex: 1;
+}
+
+.tag-filter-bar::-webkit-scrollbar {
+    display: none;
+}
+
+/* Tag chips - matches Ente Auth mobile app */
+.tag-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    padding: 6px 16px;
+    border: none;
+    border-radius: 24px;
+    background-color: var(--fill-faint);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+}
+
+.tag-chip:hover {
+    background-color: var(--fill-muted);
+}
+
+.tag-chip.selected {
+    background-color: var(--accent-purple);
+    color: #fff;
+}
+
+.tag-chip.selected:hover {
+    background-color: var(--accent-purple-hover);
+}
+
+/* 3-dot menu trigger in selected tag */
+.tag-menu-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 4px;
+    margin-right: -8px;
+    padding: 4px;
+    border-radius: 50%;
+    transition: background-color 0.15s;
+}
+
+.tag-menu-trigger:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Tag menu overlay - renders at root level */
+.tag-menu-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 100px;
+}
+
+.tag-menu-popup {
+    background-color: var(--background-paper);
+    border: 1px solid var(--stroke);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    min-width: 140px;
+    overflow: hidden;
+    animation: fadeIn 0.15s ease;
+}
+
+.tag-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 12px 16px;
+    border: none;
+    background: none;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+
+.tag-menu-item:hover {
+    background-color: var(--fill-faint);
+}
+
+.tag-menu-item.delete {
+    color: var(--error-red);
+}
+
+.tag-menu-item.delete svg {
+    stroke: var(--error-red);
+}
+
+/* Tags editor (edit form) */
+.tags-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.tags-editor-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+.tags-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* Toggleable tag chips in edit form */
+.tag-chip-toggle {
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    padding: 6px 16px;
+    border: none;
+    border-radius: 24px;
+    background-color: var(--fill-faint);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+}
+
+.tag-chip-toggle:hover {
+    background-color: var(--fill-muted);
+}
+
+.tag-chip-toggle.selected {
+    background-color: var(--accent-purple);
+    color: #fff;
+}
+
+.tag-chip-toggle.selected:hover {
+    background-color: var(--accent-purple-hover);
+}
+
+.tag-chip-toggle:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Plus circle outline button for adding new tags - matches Ente app */
+.tag-add-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--accent-purple);
+    cursor: pointer;
+    transition: all 0.15s;
+    flex-shrink: 0;
+}
+
+.tag-add-btn:hover {
+    color: var(--accent-purple-hover);
+}
+
+.tag-add-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Add tag input modal */
+.add-tag-input-container {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.add-tag-input {
+    flex: 1;
+    padding: 10px 12px;
+    background-color: var(--background-paper);
+    border: 1px solid var(--stroke);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 500;
+    font-family: inherit;
+    outline: none;
+}
+
+.add-tag-input:focus {
+    border-color: var(--accent-purple);
+}
+
+.add-tag-input::placeholder {
+    color: var(--text-faint);
+}
+
+.add-tag-btn {
+    padding: 10px 16px;
+    background-color: var(--accent-purple);
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+
+.add-tag-btn:hover {
+    background-color: var(--accent-purple-hover);
+}
+
+.add-tag-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.advanced-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 6px;
+    background-color: var(--fill-faint);
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.advanced-toggle:hover {
+    background-color: var(--fill-muted);
+    color: var(--text-primary);
+}
+
+.advanced-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px;
+    background-color: var(--fill-faint);
+    border-radius: 8px;
+}
+
+.form-row {
+    display: flex;
+    gap: 12px;
+}
+
+.form-row .form-field {
+    flex: 1;
+}
+
+.form-error {
+    padding: 12px;
+    background-color: rgba(220, 53, 69, 0.1);
+    border: 1px solid var(--error-red);
+    border-radius: 6px;
+    color: var(--error-red);
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.form-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: auto;
+    padding-top: 16px;
+}
+
+.cancel-button,
+.save-button {
+    flex: 1;
+    padding: 12px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.cancel-button {
+    background-color: var(--fill-muted);
+    border: none;
+    color: var(--text-primary);
+}
+
+.cancel-button:hover {
+    background-color: var(--fill-base);
+}
+
+.save-button {
+    background-color: var(--accent-purple);
+    border: none;
+    color: #fff;
+}
+
+.save-button:hover {
+    background-color: var(--accent-purple-hover);
+}
+
+.save-button:disabled,
+.cancel-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Delete icon button in edit form */
+.delete-icon-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background-color: var(--fill-faint);
+    color: var(--error-red);
+    cursor: pointer;
+    transition: all 0.15s;
+    flex-shrink: 0;
+}
+
+.delete-icon-button:hover {
+    background-color: var(--error-red);
+    color: #fff;
+}
+
+.delete-icon-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Delete confirmation modal */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    animation: fadeIn 0.15s ease;
+}
+
+.modal {
+    width: 90%;
+    max-width: 320px;
+    background-color: var(--background-paper);
+    border-radius: 12px;
+    padding: 20px;
+    animation: slideUp 0.2s ease;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.modal-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+}
+
+.modal-message {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-bottom: 20px;
+}
+
+.modal-message strong {
+    color: var(--text-primary);
+}
+
+.modal-field {
+    margin-bottom: 20px;
+}
+
+.modal-input {
+    width: 100%;
+    padding: 12px 14px;
+    background-color: var(--background-paper-2);
+    border: 1px solid var(--stroke);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 500;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+.modal-input:focus {
+    border-color: var(--accent-purple);
+}
+
+.modal-input::placeholder {
+    color: var(--text-faint);
+}
+
+.modal-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.modal-button {
+    flex: 1;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.modal-button.cancel {
+    background-color: var(--fill-muted);
+    color: var(--text-primary);
+}
+
+.modal-button.cancel:hover {
+    background-color: var(--fill-base);
+}
+
+.modal-button.delete {
+    background-color: var(--error-red);
+    color: #fff;
+}
+
+.modal-button.delete:hover {
+    opacity: 0.9;
+}
+
+.modal-button.save {
+    background-color: var(--accent-purple);
+    color: #fff;
+}
+
+.modal-button.save:hover {
+    background-color: var(--accent-purple-hover);
+}
+
+.modal-button.save:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Scan error toast */
+.scan-error-toast {
+    position: fixed;
+    bottom: 80px;
+    left: 16px;
+    right: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    background-color: var(--error-red);
+    color: #fff;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    animation: slideUp 0.2s ease;
+    z-index: 150;
+}
+
+.scan-error-toast button {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    opacity: 0.8;
+    transition: opacity 0.15s;
+}
+
+.scan-error-toast button:hover {
+    opacity: 1;
 }
