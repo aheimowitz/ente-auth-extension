@@ -6,12 +6,16 @@ A browser extension for Ente Auth that provides secure 2FA code autofill.
 
 ## Features
 
-- View and copy your 2FA codes from the browser toolbar
-- Automatic detection of MFA input fields on websites
-- Smart domain matching to suggest relevant codes
-- One-click autofill with optional auto-submit
-- Syncs with your Ente Auth account
-- Works with Chrome and Firefox
+- **View and copy** your 2FA codes from the browser toolbar
+- **Create new codes** manually or by scanning QR codes from the current page
+- **Edit and delete** existing codes
+- **Organize with tags** - create, rename, delete, and filter by tags
+- **Pin codes** to keep your most-used codes at the top
+- **Autofill** - automatic detection of MFA input fields on websites
+- **Smart matching** - domain matching to suggest relevant codes
+- **One-click fill** with optional auto-submit
+- **Syncs** with your Ente Auth account
+- **Cross-browser** - works with Chrome and Firefox
 
 ## Installation
 
