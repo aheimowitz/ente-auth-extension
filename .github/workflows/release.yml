@@ -72,16 +72,14 @@ jobs:
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
 
           echo "notes<<EOF" >> $GITHUB_OUTPUT
-          echo "## What's Changed" >> $GITHUB_OUTPUT
-          echo "" >> $GITHUB_OUTPUT
 
           if [ -n "$PREV_TAG" ]; then
-            git log $PREV_TAG..HEAD --pretty=format:"- %s" >> $GITHUB_OUTPUT
+            # Get the commit message body (skip the subject line, get everything else)
+            git log $PREV_TAG..HEAD --pretty=format:"%b" | head -50 >> $GITHUB_OUTPUT
           else
-            git log --pretty=format:"- %s" -10 >> $GITHUB_OUTPUT
+            git log --pretty=format:"%b" -1 | head -50 >> $GITHUB_OUTPUT
           fi
 
-          echo "" >> $GITHUB_OUTPUT
           echo "" >> $GITHUB_OUTPUT
           echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...v${{ steps.version.outputs.version }}" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
