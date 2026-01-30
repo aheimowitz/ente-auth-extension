@@ -62,7 +62,7 @@ jobs:
           AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
         run: |
           npm install -g web-ext
-          web-ext sign --source-dir=dist-firefox --channel=unlisted --api-key=$AMO_JWT_ISSUER --api-secret=$AMO_JWT_SECRET --verbose
+          web-ext sign --source-dir=dist-firefox --channel=unlisted --api-key=$AMO_JWT_ISSUER --api-secret=$AMO_JWT_SECRET
           mv web-ext-artifacts/*.xpi ente-auth-firefox-${{ steps.version.outputs.version }}.xpi
 
       - name: Generate Release Notes
