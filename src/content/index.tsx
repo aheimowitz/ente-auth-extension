@@ -13,6 +13,34 @@ import "./styles.css";
 let currentDetection: MFAFieldDetection | null = null;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let hasShownPopup = false;
+let lastUrl = window.location.href;
+let validationInterval: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Reset state and hide popup when navigation occurs.
+ */
+const resetState = (): void => {
+    hidePopup();
+    hasShownPopup = false;
+    currentDetection = null;
+};
+
+/**
+ * Check if the current detection is still valid (element in DOM and visible).
+ */
+const isDetectionValid = (): boolean => {
+    if (!currentDetection?.element) return false;
+
+    const element = currentDetection.element;
+
+    // Check if element is still in the DOM
+    if (!document.body.contains(element)) return false;
+
+    // Check if element is still visible
+    if (!element.offsetParent && element.style.display !== "fixed") return false;
+
+    return true;
+};
 
 /**
  * Send message with retry logic for MV3 service worker wake-up.
@@ -186,6 +214,35 @@ const init = (): void => {
     window.addEventListener("beforeunload", () => {
         hidePopup();
     });
+
+    // Handle SPA navigation via browser back/forward buttons
+    window.addEventListener("popstate", () => {
+        resetState();
+        debouncedCheck();
+    });
+
+    // Start validation interval to detect URL changes and element removal
+    // This catches SPA navigation via pushState/replaceState and dynamic DOM changes
+    if (validationInterval) {
+        clearInterval(validationInterval);
+    }
+    validationInterval = setInterval(() => {
+        const currentUrl = window.location.href;
+
+        // Check if URL changed (SPA navigation)
+        if (currentUrl !== lastUrl) {
+            lastUrl = currentUrl;
+            resetState();
+            debouncedCheck();
+            return;
+        }
+
+        // Check if the detected element is still valid
+        if (hasShownPopup && !isDetectionValid()) {
+            resetState();
+            debouncedCheck();
+        }
+    }, 500);
 };
 
 // Initialize when DOM is ready

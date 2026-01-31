@@ -7,6 +7,7 @@ import type { MFAFieldDetection } from "@shared/types";
 /**
  * Attribute patterns that suggest MFA input (used in name/id/class).
  * These are typically code-level identifiers, so mostly English.
+ * Note: Generic terms like "code" are excluded to avoid false positives.
  */
 const MFA_ATTRIBUTE_PATTERNS = [
     "otp",
@@ -17,41 +18,88 @@ const MFA_ATTRIBUTE_PATTERNS = [
     "twofa",
     "two-factor",
     "twofactor",
-    "verification",
-    "verify",
-    "code",
+    "verification-code",
+    "verificationcode",
+    "verify-code",
+    "verifycode",
+    "auth-code",
+    "authcode",
     "token",
     "authenticator",
-    "security",
-    "pin",
+    "security-code",
+    "securitycode",
+    "pin-code",
+    "pincode",
     "passcode",
     "one-time",
     "onetime",
 ];
 
 /**
+ * Patterns that indicate the field is NOT for MFA (promo codes, etc.).
+ * These take priority over MFA patterns.
+ */
+const EXCLUSION_PATTERNS = [
+    "promo",
+    "promotion",
+    "promotional",
+    "coupon",
+    "discount",
+    "voucher",
+    "gift",
+    "giftcard",
+    "gift-card",
+    "referral",
+    "refer",
+    "invite",
+    "invitation",
+    "redeem",
+    "reward",
+    "loyalty",
+    "offer",
+    "deal",
+    "signup",
+    "sign-up",
+    "newsletter",
+    "subscribe",
+    "captcha",
+    "recaptcha",
+    "postal",
+    "zip",
+    "zipcode",
+    "zip-code",
+    "phone",
+    "mobile",
+    "sms-marketing",
+];
+
+/**
  * Label/placeholder patterns that suggest MFA input.
  * Includes translations for common languages.
+ * Note: Patterns should be specific to MFA, not generic "code" matches.
  */
 const MFA_LABEL_PATTERNS = [
-    // English
+    // English - specific MFA terms
     "verification code",
     "authentication code",
     "security code",
     "2-factor",
     "two-factor",
-    "6-digit",
-    "6 digit",
-    "one-time",
-    "one time",
+    "6-digit code",
+    "6 digit code",
+    "one-time code",
+    "one time code",
+    "one-time password",
+    "one time password",
     "otp",
     "mfa",
     "authenticator",
-    "enter code",
-    "enter the code",
+    "enter your code",
+    "enter the code from",
     "passcode",
-    "confirm code",
-    "access code",
+    "login code",
+    "signin code",
+    "sign-in code",
 
     // Italian
     "codice di verifica",
@@ -140,6 +188,41 @@ const matchesPattern = (value: string | null, patterns: string[]): boolean => {
  * Prioritizes language-agnostic signals (HTML attributes) over text patterns.
  */
 const calculateConfidence = (input: HTMLInputElement): number => {
+    // First, check for exclusion patterns - if found, definitely not an MFA field
+    // Gather all text from attributes including data-* attributes
+    const dataAttrsText = Array.from(input.attributes)
+        .filter(attr => attr.name.startsWith("data-"))
+        .map(attr => `${attr.name} ${attr.value}`)
+        .join(" ");
+
+    const inputText = [
+        input.name,
+        input.id,
+        input.className,
+        input.placeholder,
+        input.getAttribute("aria-label"),
+        dataAttrsText,
+    ].filter(Boolean).join(" ");
+
+    if (matchesPattern(inputText, EXCLUSION_PATTERNS)) {
+        return 0;
+    }
+
+    // Also check the label for exclusion patterns
+    const inputLabel = findLabelForInput(input);
+    if (inputLabel && matchesPattern(inputLabel.textContent, EXCLUSION_PATTERNS)) {
+        return 0;
+    }
+
+    // Check container class/id for exclusion patterns
+    const inputContainer = input.closest("form, fieldset, [role='group']") || input.parentElement?.parentElement;
+    if (inputContainer) {
+        const containerText = `${(inputContainer as HTMLElement).id || ""} ${(inputContainer as HTMLElement).className || ""}`;
+        if (matchesPattern(containerText, EXCLUSION_PATTERNS)) {
+            return 0;
+        }
+    }
+
     let confidence = 0;
 
     // === HIGH CONFIDENCE: Language-agnostic HTML attributes ===
