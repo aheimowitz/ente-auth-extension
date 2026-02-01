@@ -317,6 +317,29 @@ export const App: React.FC = () => {
                 </section>
 
                 <section className="settings-section">
+                    <h2>Security</h2>
+
+                    <div className="setting-item">
+                        <div className="setting-info">
+                            <label>Lock on browser close</label>
+                            <p>
+                                Require password when the browser restarts.
+                            </p>
+                        </div>
+                        <label className="toggle">
+                            <input
+                                type="checkbox"
+                                checked={settings.lockOnBrowserClose}
+                                onChange={() =>
+                                    handleToggle("lockOnBrowserClose")
+                                }
+                            />
+                            <span className="toggle-slider"></span>
+                        </label>
+                    </div>
+                </section>
+
+                <section className="settings-section">
                     <h2>Domain Mappings</h2>
                     <p className="section-description">
                         Custom mappings help match websites to your codes when automatic detection doesn't work.

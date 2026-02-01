@@ -14,9 +14,9 @@ const KEYS = {
     SYNC_TIMESTAMP: "syncTimestamp",
     EMAIL: "email",
     CUSTOM_DOMAIN_MAPPINGS: "customDomainMappings",
-    // Master key in local storage for MV3 reliability
-    // (session storage is unreliable with service worker lifecycle)
+    // Master key storage location depends on lockOnBrowserClose setting
     MASTER_KEY: "masterKey",
+    MASTER_KEY_SESSION: "masterKeySession",
     // Session storage (cleared on browser close)
     CODES_CACHE: "codesCache",
     TIME_OFFSET: "timeOffset",
@@ -132,17 +132,35 @@ export const authStorage = {
     },
 
     async getMasterKey(): Promise<string | undefined> {
-        // Use local storage for reliability in MV3
+        // Check session storage first (for lockOnBrowserClose mode)
+        const sessionKey = await sessionStore.get<string>(KEYS.MASTER_KEY_SESSION);
+        if (sessionKey) {
+            return sessionKey;
+        }
+        // Fall back to local storage (persistent mode)
         return localStore.get<string>(KEYS.MASTER_KEY);
     },
 
     async setMasterKey(key: string): Promise<void> {
-        // Use local storage for reliability in MV3
-        await localStore.set(KEYS.MASTER_KEY, key);
+        // Check setting to determine where to store
+        const settings = await settingsStorage.getSettings();
+        if (settings.lockOnBrowserClose) {
+            // Store in session storage (cleared on browser close)
+            await sessionStore.set(KEYS.MASTER_KEY_SESSION, key);
+            // Clear any persistent key
+            await localStore.remove(KEYS.MASTER_KEY);
+        } else {
+            // Store in local storage (persists across sessions)
+            await localStore.set(KEYS.MASTER_KEY, key);
+            // Clear any session key
+            await sessionStore.remove(KEYS.MASTER_KEY_SESSION);
+        }
     },
 
     async clearMasterKey(): Promise<void> {
+        // Clear from both locations
         await localStore.remove(KEYS.MASTER_KEY);
+        await sessionStore.remove(KEYS.MASTER_KEY_SESSION);
     },
 };
 
@@ -197,6 +215,7 @@ export const settingsStorage = {
             autoFillSingleMatch,
             syncInterval: stored?.syncInterval ?? 5,
             theme: stored?.theme ?? "system",
+            lockOnBrowserClose: stored?.lockOnBrowserClose ?? false,
         };
     },
 

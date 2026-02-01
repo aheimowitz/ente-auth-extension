@@ -11,7 +11,7 @@ import type {
     ExtensionResponse,
     WebLoginCredentials,
 } from "@shared/types";
-import { getAuthState, login, logout, unlock } from "./auth";
+import { getAuthState, login, lock, logout, unlock } from "./auth";
 import { settingsStorage, authStorage, customMappingsStorage } from "./storage";
 import { getCodes, getTimeOffset, syncCodes, createCode, updateCode, deleteCode } from "./sync";
 import { scanQRFromPage } from "./qr-scanner";
@@ -219,8 +219,13 @@ const handleMessage = async (
             return { success: true };
         }
 
+        case "LOCK": {
+            await lock();
+            return { success: true };
+        }
+
         case "GET_CODES": {
-            const codes = await getCodes();
+            const codes = await getCodes(message.forceSync);
             const timeOffset = await getTimeOffset();
             return { success: true, data: { codes, timeOffset } };
         }
@@ -253,7 +258,20 @@ const handleMessage = async (
         }
 
         case "SET_SETTINGS": {
-            await settingsStorage.setSettings(message.settings);
+            // If lockOnBrowserClose is changing, migrate the master key
+            if (message.settings.lockOnBrowserClose !== undefined) {
+                const currentKey = await authStorage.getMasterKey();
+                if (currentKey) {
+                    // Save settings first so setMasterKey uses the new location
+                    await settingsStorage.setSettings(message.settings);
+                    // Re-save master key to migrate it to the new storage location
+                    await authStorage.setMasterKey(currentKey);
+                } else {
+                    await settingsStorage.setSettings(message.settings);
+                }
+            } else {
+                await settingsStorage.setSettings(message.settings);
+            }
             // Update sync alarm if interval changed
             if (message.settings.syncInterval !== undefined) {
                 await createAlarm(SYNC_ALARM_NAME, message.settings.syncInterval);

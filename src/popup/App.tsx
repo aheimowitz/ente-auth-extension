@@ -2,13 +2,49 @@
  * Extension popup main application component.
  */
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { sendMessage, openOptionsPage } from "@shared/browser";
+import { browser, sendMessage, openOptionsPage } from "@shared/browser";
 import { searchCodes } from "@shared/domain-matcher";
 import { generateOTPs } from "@shared/otp";
 import { useTheme } from "@shared/useTheme";
 import type { AuthState, Code, CodeFormData, ParsedQRCode } from "@shared/types";
 import { CodeCard } from "./CodeCard";
 import { CodeForm } from "./CodeForm";
+
+/**
+ * Read codes directly from storage without going through the service worker.
+ * This provides instant loading when the popup opens.
+ */
+const getCachedCodesFromStorage = async (): Promise<{
+    codes: Code[];
+    timeOffset: number;
+} | null> => {
+    try {
+        // Try session storage first (Chrome MV3)
+        if (browser.storage.session) {
+            const result = await browser.storage.session.get(["codesCache", "timeOffset"]);
+            if (result.codesCache && Array.isArray(result.codesCache)) {
+                const offset = typeof result.timeOffset === "number" ? result.timeOffset : 0;
+                return {
+                    codes: result.codesCache as Code[],
+                    timeOffset: offset,
+                };
+            }
+        } else {
+            // Fallback for Firefox MV2 (session data stored with prefix in local)
+            const result = await browser.storage.local.get(["session_codesCache", "session_timeOffset"]);
+            if (result.session_codesCache && Array.isArray(result.session_codesCache)) {
+                const offset = typeof result.session_timeOffset === "number" ? result.session_timeOffset : 0;
+                return {
+                    codes: result.session_codesCache as Code[],
+                    timeOffset: offset,
+                };
+            }
+        }
+    } catch (e) {
+        console.error("Failed to read cached codes from storage:", e);
+    }
+    return null;
+};
 
 type View = "loading" | "login" | "unlock" | "codes" | "add" | "edit";
 
@@ -71,57 +107,90 @@ export const App: React.FC = () => {
     };
 
     // Check auth state on mount with retry logic for MV3 service worker wake-up
+    // First tries to load cached codes for instant display, then verifies auth state
     useEffect(() => {
-        const checkAuth = async (retries = 3): Promise<void> => {
-            try {
-                const response = await sendMessage<{
-                    success: boolean;
-                    data?: AuthState;
-                    error?: string;
-                }>({ type: "GET_AUTH_STATE" });
+        const initializePopup = async (): Promise<void> => {
+            // Step 1: Try to load cached codes immediately (no service worker needed)
+            const cached = await getCachedCodesFromStorage();
+            if (cached && cached.codes.length > 0) {
+                // Show cached codes instantly while we verify auth in background
+                setCodes(cached.codes);
+                setFilteredCodes(cached.codes);
+                setTimeOffset(cached.timeOffset);
 
-                if (!response.success || !response.data) {
-                    // Retry if we got an error (service worker might be waking up)
-                    if (retries > 0 && response.error) {
+                // Extract tags from cached codes
+                const tags = new Set<string>();
+                cached.codes.forEach((code) => {
+                    code.codeDisplay?.tags?.forEach((tag) => tags.add(tag));
+                });
+                setAllTags(Array.from(tags).sort());
+
+                setView("codes");
+            }
+
+            // Step 2: Verify auth state with service worker (may need to wake up)
+            const checkAuth = async (retries = 3): Promise<void> => {
+                try {
+                    const response = await sendMessage<{
+                        success: boolean;
+                        data?: AuthState;
+                        error?: string;
+                    }>({ type: "GET_AUTH_STATE" });
+
+                    if (!response.success || !response.data) {
+                        if (retries > 0 && response.error) {
+                            await new Promise(r => setTimeout(r, 100));
+                            return checkAuth(retries - 1);
+                        }
+                        setView("login");
+                        return;
+                    }
+
+                    const { isLoggedIn, isUnlocked } = response.data;
+
+                    if (!isLoggedIn) {
+                        // Clear any cached codes we showed - user is logged out
+                        setCodes([]);
+                        setFilteredCodes([]);
+                        setView("login");
+                    } else if (!isUnlocked) {
+                        // Clear cached codes - vault is locked
+                        setCodes([]);
+                        setFilteredCodes([]);
+                        setView("unlock");
+                    } else {
+                        // User is authenticated - refresh codes from background
+                        // (they may have changed since cache was written)
+                        await loadCodes();
+                        setView("codes");
+                    }
+                } catch (e) {
+                    if (retries > 0) {
                         await new Promise(r => setTimeout(r, 100));
                         return checkAuth(retries - 1);
                     }
-                    setView("login");
-                    return;
+                    console.error("Failed to check auth:", e);
+                    // If we showed cached codes, keep showing them
+                    // Otherwise show login
+                    if (!cached || cached.codes.length === 0) {
+                        setView("login");
+                    }
                 }
+            };
 
-                const { isLoggedIn, isUnlocked } = response.data;
-
-                if (!isLoggedIn) {
-                    setView("login");
-                } else if (!isUnlocked) {
-                    setView("unlock");
-                } else {
-                    await loadCodes();
-                    setView("codes");
-                }
-            } catch (e) {
-                // Retry on exception (service worker might be waking up)
-                if (retries > 0) {
-                    await new Promise(r => setTimeout(r, 100));
-                    return checkAuth(retries - 1);
-                }
-                // Only log error after all retries exhausted
-                console.error("Failed to check auth:", e);
-                setView("login");
-            }
+            await checkAuth();
         };
 
-        checkAuth();
+        initializePopup();
     }, []);
 
-    // Load codes from background
-    const loadCodes = async () => {
+    // Load codes from background (forces sync by default for fresh data)
+    const loadCodes = async (forceSync = true) => {
         try {
             const response = await sendMessage<{
                 success: boolean;
                 data?: { codes: Code[]; timeOffset: number };
-            }>({ type: "GET_CODES" });
+            }>({ type: "GET_CODES", forceSync });
 
             if (response.success && response.data) {
                 setCodes(response.data.codes);
@@ -239,7 +308,15 @@ export const App: React.FC = () => {
         }
     };
 
-    // Handle logout
+    // Handle lock (keeps credentials, just clears master key)
+    const handleLock = async () => {
+        await sendMessage({ type: "LOCK" });
+        setCodes([]);
+        setFilteredCodes([]);
+        setView("unlock");
+    };
+
+    // Handle logout (clears everything)
     const handleLogout = async () => {
         await sendMessage({ type: "LOGOUT" });
         setCodes([]);
@@ -744,7 +821,7 @@ export const App: React.FC = () => {
                 <div className="header-right">
                     <button
                         className="icon-button"
-                        onClick={handleLogout}
+                        onClick={handleLock}
                         title="Lock"
                     >
                         <LockIcon />

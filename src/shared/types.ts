@@ -76,6 +76,8 @@ export interface ExtensionSettings {
     syncInterval: number;
     /** Theme mode. Default: "system" */
     theme: ThemeMode;
+    /** Require password when browser restarts. Default: false */
+    lockOnBrowserClose: boolean;
 }
 
 /**
@@ -86,6 +88,7 @@ export const defaultSettings: ExtensionSettings = {
     autoFillSingleMatch: true,
     syncInterval: 5,
     theme: "system",
+    lockOnBrowserClose: false,
 };
 
 /**
@@ -122,7 +125,7 @@ export interface ParsedQRCode {
  * Message types for communication between extension components.
  */
 export type ExtensionMessage =
-    | { type: "GET_CODES" }
+    | { type: "GET_CODES"; forceSync?: boolean }
     | { type: "GET_CODES_FOR_DOMAIN"; domain: string }
     | { type: "SYNC_CODES" }
     | { type: "LOGIN"; token: string; keyAttributes: KeyAttributes }
@@ -130,6 +133,7 @@ export type ExtensionMessage =
     | { type: "OPEN_WEB_LOGIN" }
     | { type: "WEB_LOGIN_CREDENTIALS"; credentials: WebLoginCredentials }
     | { type: "LOGOUT" }
+    | { type: "LOCK" }
     | { type: "UNLOCK"; password: string }
     | { type: "GET_AUTH_STATE" }
     | { type: "GET_SETTINGS" }
