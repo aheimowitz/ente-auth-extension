@@ -1,6 +1,6 @@
 {
     "name": "auth-extension",
-    "version": "0.2.2",
+    "version": "0.2.3",
     "private": true,
     "description": "Ente Auth browser extension for secure 2FA autofill",
     "scripts": {

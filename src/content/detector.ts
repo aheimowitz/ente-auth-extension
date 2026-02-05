@@ -317,6 +317,17 @@ const calculateConfidence = (input: HTMLInputElement): number => {
         }
     }
 
+    // Check ancestor tag names (catches custom elements like <app-two-factor-auth>)
+    let ancestor: HTMLElement | null = input.parentElement;
+    while (ancestor && ancestor !== document.body) {
+        const tagName = ancestor.tagName.toLowerCase();
+        if (matchesPattern(tagName, MFA_ATTRIBUTE_PATTERNS)) {
+            confidence += 0.2;
+            break;
+        }
+        ancestor = ancestor.parentElement;
+    }
+
     return Math.min(confidence, 1);
 };
 
