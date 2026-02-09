@@ -33,6 +33,7 @@ const MFA_ATTRIBUTE_PATTERNS = [
     "passcode",
     "one-time",
     "onetime",
+    "otc",
 ];
 
 /**
