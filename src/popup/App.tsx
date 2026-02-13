@@ -324,16 +324,13 @@ export const App: React.FC = () => {
         setView("login");
     };
 
-    // Handle web login - opens auth.ente.io in a new tab
+    // Handle login - opens the extension's built-in login page in a new tab
     const handleWebLogin = async () => {
         setError(null);
         setLoggingIn(true);
         try {
-            // Open the tab directly from popup - more reliable across browsers
-            // Using window.open as a fallback-safe approach
-            window.open("https://auth.ente.io", "_blank");
-            // The content script on auth.ente.io will capture credentials
-            // and send them back. We'll poll for auth state changes.
+            const loginUrl = browser.runtime.getURL("login/index.html");
+            window.open(loginUrl, "_blank");
             pollForLogin();
         } catch (e) {
             setError(e instanceof Error ? e.message : "Failed to open login page");
@@ -698,7 +695,7 @@ export const App: React.FC = () => {
                             onClick={handleWebLogin}
                             disabled={loggingIn}
                         >
-                            {loggingIn ? "Waiting for login..." : "Log in with Ente"}
+                            {loggingIn ? "Waiting for login..." : "Log in"}
                         </button>
                         {loggingIn && (
                             <div className="auth-hint">

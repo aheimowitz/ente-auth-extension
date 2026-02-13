@@ -14,9 +14,9 @@ module.exports = {
     entry: {
         "background/index": "./src/background/index.ts",
         "content/index": "./src/content/index.tsx",
-        "content/auth-capture": "./src/content/auth-capture.ts",
         "popup/index": "./src/popup/index.tsx",
         "options/index": "./src/options/index.tsx",
+        "login/index": "./src/login/index.tsx",
     },
     output: {
         path: outputPath,
@@ -49,10 +49,19 @@ module.exports = {
         fallback: {
             fs: false,
             path: false,
-            crypto: false,
+            crypto: require.resolve("crypto-browserify"),
+            buffer: require.resolve("buffer/"),
+            stream: require.resolve("stream-browserify"),
+            process: require.resolve("process/browser"),
+            assert: require.resolve("assert/"),
+            vm: require.resolve("vm-browserify"),
         },
     },
     plugins: [
+        new webpack.ProvidePlugin({
+            Buffer: ["buffer", "Buffer"],
+            process: "process/browser",
+        }),
         new MiniCssExtractPlugin({
             filename: "[name].css",
         }),
@@ -79,6 +88,11 @@ module.exports = {
             template: "./src/options/index.html",
             filename: "options/index.html",
             chunks: ["options/index"],
+        }),
+        new HtmlWebpackPlugin({
+            template: "./src/login/index.html",
+            filename: "login/index.html",
+            chunks: ["login/index"],
         }),
     ],
     optimization: {

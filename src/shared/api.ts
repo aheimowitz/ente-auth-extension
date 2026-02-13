@@ -7,7 +7,20 @@ import type { AuthenticatorEntityKey, Code, EncryptedBlob } from "./types";
 import { codeFromURIString } from "./code";
 import { decryptBox, decryptMetadataJSON } from "./crypto";
 
-const API_URL = "https://api.ente.io";
+const DEFAULT_API_URL = "https://api.ente.io";
+let apiBaseUrl = DEFAULT_API_URL;
+
+/**
+ * Set the API base URL. Pass empty string or undefined to reset to default.
+ */
+export const setApiBaseUrl = (url?: string): void => {
+    apiBaseUrl = url && url.trim() ? url.trim().replace(/\/+$/, "") : DEFAULT_API_URL;
+};
+
+/**
+ * Get the current API base URL.
+ */
+export const getApiBaseUrl = (): string => apiBaseUrl;
 
 /**
  * Build the API URL with optional query parameters.
@@ -16,7 +29,7 @@ export const buildApiUrl = (
     path: string,
     params?: Record<string, string | number>
 ): string => {
-    const url = new URL(path, API_URL);
+    const url = new URL(path, apiBaseUrl);
     if (params) {
         Object.entries(params).forEach(([key, value]) => {
             url.searchParams.set(key, String(value));

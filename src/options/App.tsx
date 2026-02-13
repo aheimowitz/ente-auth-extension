@@ -340,6 +340,68 @@ export const App: React.FC = () => {
                 </section>
 
                 <section className="settings-section">
+                    <h2>Server</h2>
+
+                    <div className="setting-item vertical">
+                        <div className="setting-info">
+                            <label>Server URL</label>
+                            <p>
+                                Leave empty to use Ente Cloud. Set a custom URL for self-hosted instances.
+                            </p>
+                        </div>
+                        <input
+                            type="url"
+                            className="text-input"
+                            placeholder="https://api.ente.io"
+                            value={settings.serverUrl || ""}
+                            onChange={(e) => {
+                                const newUrl = e.target.value;
+                                setSettings((prev) =>
+                                    prev ? { ...prev, serverUrl: newUrl } : null
+                                );
+                            }}
+                            onBlur={() => {
+                                saveSettings({ serverUrl: settings.serverUrl || "" });
+                            }}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    saveSettings({ serverUrl: settings.serverUrl || "" });
+                                }
+                            }}
+                        />
+                    </div>
+
+                    <div className="setting-item vertical">
+                        <div className="setting-info">
+                            <label>Accounts URL</label>
+                            <p>
+                                URL of the Ente Accounts web app. Required for passkeys on self-hosted instances.
+                            </p>
+                        </div>
+                        <input
+                            type="url"
+                            className="text-input"
+                            placeholder="https://accounts.ente.io"
+                            value={settings.accountsUrl || ""}
+                            onChange={(e) => {
+                                const newUrl = e.target.value;
+                                setSettings((prev) =>
+                                    prev ? { ...prev, accountsUrl: newUrl } : null
+                                );
+                            }}
+                            onBlur={() => {
+                                saveSettings({ accountsUrl: settings.accountsUrl || "" });
+                            }}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    saveSettings({ accountsUrl: settings.accountsUrl || "" });
+                                }
+                            }}
+                        />
+                    </div>
+                </section>
+
+                <section className="settings-section">
                     <h2>Domain Mappings</h2>
                     <p className="section-description">
                         Custom mappings help match websites to your codes when automatic detection doesn't work.

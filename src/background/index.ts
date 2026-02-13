@@ -5,11 +5,10 @@
 import type Browser from "webextension-polyfill";
 import { browser, createAlarm, onAlarm, onMessage } from "@shared/browser";
 import { matchCodesToDomain, setCustomMappings } from "@shared/domain-matcher";
-import { deriveKey, decryptBoxBytes, toB64 } from "@shared/crypto";
+import { setApiBaseUrl } from "@shared/api";
 import type {
     ExtensionMessage,
     ExtensionResponse,
-    WebLoginCredentials,
 } from "@shared/types";
 import { getAuthState, login, lock, logout, unlock } from "./auth";
 import { settingsStorage, authStorage, customMappingsStorage } from "./storage";
@@ -37,9 +36,10 @@ onMessage((message, sender, sendResponse) => {
 const init = async () => {
     console.log("Ente Auth extension background script initialized");
 
-    // Set up periodic sync alarm
+    // Set up periodic sync alarm and configure API URL
     const settings = await settingsStorage.getSettings();
     await createAlarm(SYNC_ALARM_NAME, settings.syncInterval);
+    setApiBaseUrl(settings.serverUrl);
 
     // Handle alarm events
     onAlarm(async (alarm) => {
@@ -58,7 +58,7 @@ const init = async () => {
  * Validate that a message sender is from a trusted extension context.
  */
 const isValidSender = (sender: Browser.Runtime.MessageSender): boolean => {
-    // Allow messages from extension pages (popup, options, background)
+    // Allow messages from extension pages (popup, options, login, background)
     if (sender.id === browser.runtime.id) {
         // Extension's own pages are always trusted
         // Note: In Firefox, sender.url uses a UUID different from browser.runtime.id,
@@ -66,18 +66,6 @@ const isValidSender = (sender: Browser.Runtime.MessageSender): boolean => {
         if (sender.url?.startsWith("chrome-extension://") ||
             sender.url?.startsWith("moz-extension://")) {
             return true;
-        }
-        // Content scripts on allowed domains
-        if (sender.url) {
-            try {
-                const url = new URL(sender.url);
-                const allowedDomains = ["auth.ente.io", "web.ente.io"];
-                if (allowedDomains.includes(url.hostname)) {
-                    return true;
-                }
-            } catch {
-                // Invalid URL, fall through
-            }
         }
         // Messages from content scripts on other domains (for autofill)
         // These are still from our extension, just injected into pages
@@ -121,75 +109,37 @@ const handleMessage = async (
             }
         }
 
-        case "LOGIN_SRP": {
-            // Deprecated: Use OPEN_WEB_LOGIN instead
-            return {
-                success: false,
-                error: "Please use the web login option instead.",
-            };
+        case "LOGIN_COMPLETE": {
+            try {
+                await login(message.token, message.keyAttributes, message.email);
+                await authStorage.setMasterKey(message.masterKey);
+
+                // Sync codes after successful login
+                try {
+                    await syncCodes();
+                } catch (syncError) {
+                    console.error("Failed to sync after login:", syncError);
+                }
+                return { success: true };
+            } catch (e) {
+                console.error("Login complete error:", e);
+                return {
+                    success: false,
+                    error: e instanceof Error ? e.message : "Login failed",
+                };
+            }
         }
 
-        case "OPEN_WEB_LOGIN": {
+        case "OPEN_LOGIN_PAGE": {
             try {
-                // Open auth.ente.io in a new tab for the user to log in
-                await browser.tabs.create({ url: "https://auth.ente.io" });
+                await browser.tabs.create({
+                    url: browser.runtime.getURL("login/index.html"),
+                });
                 return { success: true };
             } catch (e) {
                 return {
                     success: false,
                     error: e instanceof Error ? e.message : "Failed to open login page",
-                };
-            }
-        }
-
-        case "WEB_LOGIN_CREDENTIALS": {
-            try {
-                const credentials = message.credentials as WebLoginCredentials;
-
-                // Store credentials
-                await login(credentials.token, credentials.keyAttributes, credentials.email);
-
-                // Get master key - prefer the one from session storage (already decrypted)
-                let masterKey = credentials.masterKey;
-
-                // Only try password derivation if we don't have masterKey
-                if (!masterKey && credentials.password) {
-                    // Derive KEK from password
-                    const kek = await deriveKey(
-                        credentials.password,
-                        credentials.keyAttributes.kekSalt,
-                        credentials.keyAttributes.opsLimit,
-                        credentials.keyAttributes.memLimit
-                    );
-                    // Decrypt master key using KEK
-                    const masterKeyBytes = await decryptBoxBytes(
-                        {
-                            encryptedData: credentials.keyAttributes.encryptedKey,
-                            nonce: credentials.keyAttributes.keyDecryptionNonce,
-                        },
-                        kek
-                    );
-                    masterKey = await toB64(masterKeyBytes);
-                }
-
-                if (masterKey) {
-                    await authStorage.setMasterKey(masterKey);
-
-                    // Sync codes after successful login
-                    try {
-                        await syncCodes();
-                    } catch (syncError) {
-                        console.error("Failed to sync after login:", syncError);
-                    }
-                    return { success: true };
-                } else {
-                    return { success: false, error: "No master key - please unlock manually" };
-                }
-            } catch (e) {
-                console.error("Web login error:", e);
-                return {
-                    success: false,
-                    error: e instanceof Error ? e.message : "Login failed",
                 };
             }
         }
@@ -275,6 +225,10 @@ const handleMessage = async (
             // Update sync alarm if interval changed
             if (message.settings.syncInterval !== undefined) {
                 await createAlarm(SYNC_ALARM_NAME, message.settings.syncInterval);
+            }
+            // Update API URL if server URL changed
+            if (message.settings.serverUrl !== undefined) {
+                setApiBaseUrl(message.settings.serverUrl);
             }
             return { success: true };
         }

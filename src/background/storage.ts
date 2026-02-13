@@ -216,6 +216,8 @@ export const settingsStorage = {
             syncInterval: stored?.syncInterval ?? 5,
             theme: stored?.theme ?? "system",
             lockOnBrowserClose: stored?.lockOnBrowserClose ?? false,
+            serverUrl: stored?.serverUrl ?? "",
+            accountsUrl: stored?.accountsUrl ?? "",
         };
     },
 

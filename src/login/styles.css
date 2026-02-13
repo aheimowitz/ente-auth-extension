@@ -1,0 +1,281 @@
+@import "../shared/theme.css";
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--background);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.5;
+    min-height: 100vh;
+}
+
+#root {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.login-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 24px;
+    width: 100%;
+}
+
+.login-card {
+    width: 100%;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 48px 32px;
+    background-color: var(--background-paper);
+    border-radius: 16px;
+    border: 1px solid var(--stroke);
+}
+
+.login-logo {
+    margin-bottom: 24px;
+}
+
+.login-title {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+}
+
+.login-subtitle {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-bottom: 24px;
+    max-width: 320px;
+    line-height: 1.5;
+}
+
+.login-subtitle strong {
+    color: var(--text-primary);
+}
+
+.login-form {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.login-input {
+    width: 100%;
+    padding: 14px 16px;
+    background-color: var(--background);
+    border: 1px solid var(--stroke);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 500;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.login-input::placeholder {
+    color: var(--text-faint);
+}
+
+.login-input:focus {
+    border-color: var(--accent-purple);
+}
+
+.login-input:disabled {
+    opacity: 0.6;
+}
+
+.login-input.ott-input {
+    text-align: center;
+    font-size: 24px;
+    letter-spacing: 0.3em;
+    font-weight: 600;
+}
+
+.login-button {
+    width: 100%;
+    padding: 14px 24px;
+    background-color: var(--accent-purple);
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 50px;
+}
+
+.login-button:hover:not(:disabled) {
+    background-color: var(--accent-purple-hover);
+}
+
+.login-button:disabled {
+    background-color: var(--fill-muted);
+    color: var(--text-faint);
+    cursor: not-allowed;
+}
+
+.login-error {
+    color: var(--error-red);
+    font-size: 13px;
+    font-weight: 500;
+    text-align: center;
+    padding: 8px;
+    background-color: rgba(245, 52, 52, 0.1);
+    border-radius: 6px;
+}
+
+.login-link {
+    background: none;
+    border: none;
+    color: var(--accent-purple);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    margin-top: 16px;
+    padding: 4px 8px;
+    font-family: inherit;
+}
+
+.login-link:hover {
+    text-decoration: underline;
+}
+
+.login-success {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.success-checkmark {
+    margin-bottom: 16px;
+}
+
+.login-hint {
+    font-size: 13px;
+    color: var(--text-faint);
+    margin-top: 8px;
+}
+
+/* Spinner */
+.spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Passkey choice step */
+.passkey-choice-buttons {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.passkey-choice-button {
+    width: 100%;
+    padding: 14px 24px;
+    background-color: var(--accent-purple);
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-height: 50px;
+}
+
+.passkey-choice-button:hover {
+    background-color: var(--accent-purple-hover);
+}
+
+.passkey-choice-button.secondary {
+    background-color: transparent;
+    border: 1px solid var(--stroke);
+    color: var(--text-primary);
+}
+
+.passkey-choice-button.secondary:hover {
+    background-color: var(--fill-muted);
+}
+
+/* Passkey waiting step */
+.passkey-waiting {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin: 16px 0;
+}
+
+.passkey-waiting .spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--stroke);
+    border-top-color: var(--accent-purple);
+}
+
+.passkey-status-text {
+    font-size: 14px;
+    color: var(--text-muted);
+}
+
+.passkey-actions {
+    width: 100%;
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.passkey-action-button {
+    flex: 1;
+    font-size: 14px;
+    padding: 10px 16px;
+    min-height: 42px;
+}
+
+.passkey-action-button.secondary {
+    background-color: transparent;
+    border: 1px solid var(--stroke);
+    color: var(--text-primary);
+}
+
+.passkey-action-button.secondary:hover:not(:disabled) {
+    background-color: var(--fill-muted);
+}

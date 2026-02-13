@@ -16,6 +16,14 @@ export const toB64 = async (input: Uint8Array): Promise<string> => {
 };
 
 /**
+ * Convert bytes to a URL-safe base64 string.
+ */
+export const toB64URLSafe = async (input: Uint8Array): Promise<string> => {
+    await sodium.ready;
+    return sodium.to_base64(input, sodium.base64_variants.URLSAFE);
+};
+
+/**
  * Convert a base64 string to bytes.
  */
 export const fromB64 = async (input: string): Promise<Uint8Array> => {

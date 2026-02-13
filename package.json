@@ -1,6 +1,6 @@
 {
     "name": "auth-extension",
-    "version": "0.2.4",
+    "version": "0.3.0",
     "private": true,
     "description": "Ente Auth browser extension for secure 2FA autofill",
     "scripts": {
@@ -12,12 +12,19 @@
         "dev:firefox": "cross-env BROWSER=firefox webpack --config webpack.config.js --watch"
     },
     "dependencies": {
+        "assert": "^2.1.0",
+        "buffer": "^6.0.3",
+        "crypto-browserify": "^3.12.1",
+        "fast-srp-hap": "^2.0.4",
         "jsqr": "^1.4.0",
         "jssha": "~3.3.1",
         "libsodium-wrappers-sumo": "^0.7.15",
         "otpauth": "9.2.4",
+        "process": "^0.11.10",
         "react": "^19.1.0",
         "react-dom": "^19.1.0",
+        "stream-browserify": "^3.0.0",
+        "vm-browserify": "^1.1.2",
         "webextension-polyfill": "^0.12.0",
         "zod": "^3.24.1"
     },

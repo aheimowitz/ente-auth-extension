@@ -78,6 +78,10 @@ export interface ExtensionSettings {
     theme: ThemeMode;
     /** Require password when browser restarts. Default: false */
     lockOnBrowserClose: boolean;
+    /** Custom server URL for self-hosted instances. Empty string means use Ente Cloud. */
+    serverUrl: string;
+    /** Custom accounts URL for passkey verification on self-hosted instances. Empty string means use accounts.ente.io. */
+    accountsUrl: string;
 }
 
 /**
@@ -89,6 +93,8 @@ export const defaultSettings: ExtensionSettings = {
     syncInterval: 5,
     theme: "system",
     lockOnBrowserClose: false,
+    serverUrl: "",
+    accountsUrl: "",
 };
 
 /**
@@ -129,9 +135,8 @@ export type ExtensionMessage =
     | { type: "GET_CODES_FOR_DOMAIN"; domain: string }
     | { type: "SYNC_CODES" }
     | { type: "LOGIN"; token: string; keyAttributes: KeyAttributes }
-    | { type: "LOGIN_SRP"; email: string; password: string }
-    | { type: "OPEN_WEB_LOGIN" }
-    | { type: "WEB_LOGIN_CREDENTIALS"; credentials: WebLoginCredentials }
+    | { type: "LOGIN_COMPLETE"; token: string; email: string; keyAttributes: KeyAttributes; masterKey: string }
+    | { type: "OPEN_LOGIN_PAGE" }
     | { type: "LOGOUT" }
     | { type: "LOCK" }
     | { type: "UNLOCK"; password: string }
@@ -146,18 +151,6 @@ export type ExtensionMessage =
     | { type: "UPDATE_CODE"; id: string; code: CodeFormData }
     | { type: "DELETE_CODE"; id: string }
     | { type: "SCAN_QR_FROM_PAGE" };
-
-/**
- * Credentials captured from web login.
- */
-export interface WebLoginCredentials {
-    token: string;
-    email: string;
-    userId: number;
-    masterKey: string | null;
-    keyAttributes: KeyAttributes;
-    password: string | null;
-}
 
 /**
  * Response types for extension messages.
@@ -241,4 +234,52 @@ export interface MFAFieldDetection {
     confidence: number;
     type: "single" | "split";
     splitInputs?: HTMLInputElement[];
+}
+
+/**
+ * SRP attributes returned by the server.
+ */
+export interface SRPAttributes {
+    srpUserID: string;
+    srpSalt: string;
+    memLimit: number;
+    opsLimit: number;
+    kekSalt: string;
+    isEmailMFAEnabled: boolean;
+}
+
+/**
+ * Response from SRP verification.
+ */
+export interface SRPVerificationResponse {
+    id: number;
+    keyAttributes?: KeyAttributes;
+    encryptedToken?: string;
+    token?: string;
+    srpM2: string;
+    twoFactorSessionID?: string;
+    passkeySessionID?: string;
+    twoFactorSessionIDV2?: string;
+}
+
+/**
+ * Response from email verification.
+ */
+export interface EmailVerificationResponse {
+    id: number;
+    keyAttributes?: KeyAttributes;
+    encryptedToken?: string;
+    token?: string;
+    twoFactorSessionID?: string;
+    passkeySessionID?: string;
+    twoFactorSessionIDV2?: string;
+}
+
+/**
+ * Response from two-factor authorization.
+ */
+export interface TwoFactorAuthorizationResponse {
+    id: number;
+    keyAttributes: KeyAttributes;
+    encryptedToken: string;
 }
