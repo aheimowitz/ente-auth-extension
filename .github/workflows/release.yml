@@ -32,9 +32,13 @@ jobs:
 
       - name: Build for Chrome
         run: npm run build:chrome
+        env:
+          NODE_ENV: production
 
       - name: Build for Firefox
         run: npm run build:firefox
+        env:
+          NODE_ENV: production
 
       - name: Get version
         id: version
