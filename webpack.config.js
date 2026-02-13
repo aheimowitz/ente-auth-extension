@@ -95,6 +95,9 @@ module.exports = {
             chunks: ["login/index"],
         }),
     ],
+    performance: {
+        hints: false,
+    },
     optimization: {
         splitChunks: false,
     },
