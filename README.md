@@ -15,6 +15,8 @@ A browser extension for Ente Auth that provides secure 2FA code autofill.
 - **Smart matching** - domain matching to suggest relevant codes
 - **One-click fill** with optional auto-submit
 - **Syncs** with your Ente Auth account
+- **Passkey support** - authenticate with passkeys via Ente Accounts
+- **Self-hosted support** - configure a custom server endpoint
 - **Cross-browser** - works with Chrome and Firefox
 
 ## Installation
@@ -82,17 +84,25 @@ ente-auth-extension/
 ├── src/
 │   ├── background/    # Service worker (Chrome) / background script (Firefox)
 │   ├── content/       # Content scripts for MFA detection and autofill
+│   ├── login/         # Built-in login page (SRP, passkey, email OTT)
 │   ├── options/       # Extension options page
 │   ├── popup/         # Browser toolbar popup UI
-│   └── shared/        # Shared utilities (crypto, OTP, API)
+│   └── shared/        # Shared utilities (crypto, OTP, API, SRP)
 └── dist-*/            # Build outputs (gitignored)
 ```
 
 ## Authentication
 
-The extension authenticates by opening `auth.ente.io` in a new tab. Once you
-log in, your credentials are securely captured and stored in the extension.
-Your 2FA codes are then synced and available from the toolbar popup.
+The extension has a built-in login page that supports:
+
+- **SRP (Secure Remote Password)** — your password is verified without ever being sent to the server
+- **Email OTT** — one-time token sent to your email as a fallback
+- **Passkeys** — redirects to Ente Accounts for WebAuthn verification, then polls for the result
+- **TOTP two-factor** — standard authenticator app codes
+
+For self-hosted Ente instances, you can configure a custom server endpoint on
+the login page or in the extension options. Once authenticated, your 2FA codes
+are synced and available from the toolbar popup.
 
 ## How Autofill Works
 
