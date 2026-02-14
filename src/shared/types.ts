@@ -82,6 +82,8 @@ export interface ExtensionSettings {
     serverUrl: string;
     /** Custom accounts URL for passkey verification on self-hosted instances. Empty string means use accounts.ente.io. */
     accountsUrl: string;
+    /** Sort order for codes list. Default: "issuer" */
+    sortOrder: "issuer" | "account" | "recent";
 }
 
 /**
@@ -95,6 +97,7 @@ export const defaultSettings: ExtensionSettings = {
     lockOnBrowserClose: false,
     serverUrl: "",
     accountsUrl: "",
+    sortOrder: "issuer",
 };
 
 /**

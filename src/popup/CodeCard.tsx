@@ -31,7 +31,7 @@ export const CodeCard: React.FC<CodeCardProps> = ({
     const [displayOtp, setDisplayOtp] = useState(otp);
     const [displayNextOtp, setDisplayNextOtp] = useState(nextOtp);
 
-    // Use CSS animation for smooth progress bar (runs on compositor thread, unaffected by JS)
+    // Animate progress bar via requestAnimationFrame — immune to DOM reordering
     const period = code.period;
     const [isWarning, setIsWarning] = useState(() => getProgress(code, timeOffset) < 0.4);
 
@@ -39,62 +39,49 @@ export const CodeCard: React.FC<CodeCardProps> = ({
         const progressBar = progressBarRef.current;
         if (!progressBar) return;
 
-        let intervalId: number | undefined;
-        let warningIntervalId: number | undefined;
+        progressBar.style.transition = 'none';
 
-        const updateAnimation = () => {
+        let rafId: number;
+        let lastPeriodStart = 0;
+        let wasWarning = false;
+
+        const animate = () => {
             const periodMs = period * 1000;
             const timestamp = Date.now() + timeOffset;
             const timeRemaining = periodMs - (timestamp % periodMs);
             const currentProgress = timeRemaining / periodMs;
 
-            // Update warning state immediately when resetting
-            setIsWarning(currentProgress < 0.4);
+            progressBar.style.width = `${currentProgress * 100}%`;
 
-            // Update OTPs at period boundary (when progress resets to ~100%)
-            if (currentProgress > 0.95) {
+            // Update OTPs at period boundary
+            const currentPeriodStart = Math.floor(timestamp / periodMs);
+            if (currentPeriodStart !== lastPeriodStart) {
+                lastPeriodStart = currentPeriodStart;
                 const [newOtp, newNextOtp] = generateOTPs(code, timeOffset);
                 setDisplayOtp(newOtp);
                 setDisplayNextOtp(newNextOtp);
             }
 
-            // Set current width and animate to 0
-            progressBar.style.transition = 'none';
-            progressBar.style.width = `${currentProgress * 100}%`;
+            // Only trigger re-render when warning state actually changes
+            const isNowWarning = currentProgress < 0.4;
+            if (isNowWarning !== wasWarning) {
+                wasWarning = isNowWarning;
+                setIsWarning(isNowWarning);
+            }
 
-            // Force reflow to apply the width immediately
-            progressBar.offsetHeight;
-
-            // Animate from current position to 0 over remaining time
-            progressBar.style.transition = `width ${timeRemaining}ms linear`;
-            progressBar.style.width = '0%';
+            rafId = requestAnimationFrame(animate);
         };
 
-        const checkWarning = () => {
-            setIsWarning(getProgress(code, timeOffset) < 0.4);
-        };
-
-        updateAnimation();
-
-        // Check warning color every second
-        warningIntervalId = window.setInterval(checkWarning, 1000);
-
-        // Recalculate animation at each period boundary
+        // Initialize
         const periodMs = period * 1000;
         const timestamp = Date.now() + timeOffset;
-        const timeToNextPeriod = periodMs - (timestamp % periodMs);
+        lastPeriodStart = Math.floor(timestamp / periodMs);
+        wasWarning = (periodMs - (timestamp % periodMs)) / periodMs < 0.4;
+        setIsWarning(wasWarning);
 
-        const timeoutId = window.setTimeout(() => {
-            updateAnimation();
-            // Then set up interval for subsequent periods
-            intervalId = window.setInterval(updateAnimation, periodMs);
-        }, timeToNextPeriod);
+        rafId = requestAnimationFrame(animate);
 
-        return () => {
-            window.clearTimeout(timeoutId);
-            if (intervalId) window.clearInterval(intervalId);
-            if (warningIntervalId) window.clearInterval(warningIntervalId);
-        };
+        return () => cancelAnimationFrame(rafId);
     }, [period, timeOffset, code]);
 
     // Sync with parent props when they change (e.g., initial load or code change)

@@ -218,6 +218,7 @@ export const settingsStorage = {
             lockOnBrowserClose: stored?.lockOnBrowserClose ?? false,
             serverUrl: stored?.serverUrl ?? "",
             accountsUrl: stored?.accountsUrl ?? "",
+            sortOrder: stored?.sortOrder ?? "issuer",
         };
     },
 

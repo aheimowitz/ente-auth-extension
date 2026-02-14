@@ -58,7 +58,11 @@ export const App: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState("");
     const [showSearch, setShowSearch] = useState(false);
     const [showSortMenu, setShowSortMenu] = useState(false);
-    const [sortOrder, setSortOrder] = useState<"issuer" | "account" | "recent">("issuer");
+    const [sortOrder, setSortOrderState] = useState<"issuer" | "account" | "recent">("issuer");
+    const setSortOrder = (order: "issuer" | "account" | "recent") => {
+        setSortOrderState(order);
+        sendMessage({ type: "SET_SETTINGS", settings: { sortOrder: order } });
+    };
     const [timeOffset, setTimeOffset] = useState(0);
     const [password, setPassword] = useState("");
     const [error, setError] = useState<string | null>(null);
@@ -110,6 +114,15 @@ export const App: React.FC = () => {
     // First tries to load cached codes for instant display, then verifies auth state
     useEffect(() => {
         const initializePopup = async (): Promise<void> => {
+            // Load saved sort order from settings
+            const settingsRes = await sendMessage<{
+                success: boolean;
+                data?: { sortOrder?: "issuer" | "account" | "recent" };
+            }>({ type: "GET_SETTINGS" });
+            if (settingsRes.success && settingsRes.data?.sortOrder) {
+                setSortOrder(settingsRes.data.sortOrder);
+            }
+
             // Step 1: Try to load cached codes immediately (no service worker needed)
             const cached = await getCachedCodesFromStorage();
             if (cached && cached.codes.length > 0) {
@@ -210,13 +223,14 @@ export const App: React.FC = () => {
     };
 
     // Update OTPs every second (codes only change once per period)
+    // Uses `codes` (not `filteredCodes`) so sort/filter changes don't restart the interval
     useEffect(() => {
         if (view !== "codes" || codes.length === 0) return;
 
         const updateOtpCodes = () => {
             const newOtps = new Map<string, { otp: string; nextOtp: string }>();
 
-            filteredCodes.forEach((code) => {
+            codes.forEach((code) => {
                 const [otp, nextOtp] = generateOTPs(code, timeOffset);
                 newOtps.set(code.id, { otp, nextOtp });
             });
@@ -228,7 +242,7 @@ export const App: React.FC = () => {
         const interval = setInterval(updateOtpCodes, 1000);
 
         return () => clearInterval(interval);
-    }, [view, filteredCodes, timeOffset]);
+    }, [view, codes, timeOffset]);
 
     // Filter and sort codes when search query, tag, or sort order changes
     useEffect(() => {
