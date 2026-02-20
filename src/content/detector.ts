@@ -34,6 +34,7 @@ const MFA_ATTRIBUTE_PATTERNS = [
     "one-time",
     "onetime",
     "otc",
+    "fudis",
 ];
 
 /**
