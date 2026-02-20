@@ -174,6 +174,18 @@ const MFA_LABEL_PATTERNS = [
     "验证码",
     "認證碼",
     "安全码",
+    "动态口令",
+    "动态码",
+    "动态验证码",
+    "两步验证",
+    "身份验证码",
+    "mfa码",
+
+    // Korean (common patterns)
+    "인증 코드",
+    "인증코드",
+    "보안 코드",
+    "일회용 비밀번호",
 ];
 
 /**
@@ -319,11 +331,18 @@ const calculateConfidence = (input: HTMLInputElement): number => {
         }
     }
 
-    // Check ancestor tag names (catches custom elements like <app-two-factor-auth>)
+    // Check ancestor tag names and class/id (catches custom elements like
+    // <app-two-factor-auth> and wrapper divs like <div class="mfa-input">)
     let ancestor: HTMLElement | null = input.parentElement;
     while (ancestor && ancestor !== document.body) {
+        // Skip the container already checked above to avoid double-counting
+        if (ancestor === container) {
+            ancestor = ancestor.parentElement;
+            continue;
+        }
         const tagName = ancestor.tagName.toLowerCase();
-        if (matchesPattern(tagName, MFA_ATTRIBUTE_PATTERNS)) {
+        const ancestorIdClass = `${ancestor.id || ""} ${ancestor.className || ""}`;
+        if (matchesPattern(tagName, MFA_ATTRIBUTE_PATTERNS) || matchesPattern(ancestorIdClass, MFA_ATTRIBUTE_PATTERNS)) {
             confidence += 0.2;
             break;
         }

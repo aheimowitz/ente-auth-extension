@@ -115,7 +115,13 @@ const isLikelySubmitButton = (element: HTMLElement): boolean => {
     const submitKeywords = [
         "submit", "verify", "confirm", "continue", "next",
         "sign in", "signin", "login", "log in", "authenticate",
-        "send", "done", "ok", "go", "enter"
+        "send", "done", "ok", "go", "enter",
+        // Chinese
+        "验证", "确认", "提交", "继续", "登录", "登入", "下一步",
+        // Japanese
+        "確認", "送信", "ログイン", "次へ",
+        // Korean
+        "확인", "제출", "로그인", "다음",
     ];
 
     // Check text content, aria-label, and title
