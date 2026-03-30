@@ -58,7 +58,7 @@ const Dropdown: React.FC<DropdownProps> = ({
 }) => {
     const [otps, setOtps] = useState<Map<string, string>>(new Map());
     const [progress, setProgress] = useState<Map<string, number>>(new Map());
-    const [view, setView] = useState<DropdownView>(matches.length > 0 ? "matches" : "search");
+    const [view, setView] = useState<DropdownView>("matches");
     const [allCodes, setAllCodes] = useState<Code[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedCode, setSelectedCode] = useState<Code | null>(null);
@@ -641,7 +641,8 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
     autoFillSingleMatch,
     domain,
 }) => {
-    const [isOpen, setIsOpen] = useState(false);
+    const shouldAutoOpenDropdown = matches.length > 0 && !(autoFillSingleMatch && matches.length === 1);
+    const [isOpen, setIsOpen] = useState(() => shouldAutoOpenDropdown);
     const [theme, setTheme] = useState<ResolvedTheme>("dark");
     const containerRef = useRef<HTMLDivElement>(null);
 
