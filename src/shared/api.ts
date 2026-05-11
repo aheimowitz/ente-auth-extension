@@ -7,14 +7,14 @@ import type { AuthenticatorEntityKey, Code, EncryptedBlob } from "./types";
 import { codeFromURIString } from "./code";
 import { decryptBox, decryptMetadataJSON } from "./crypto";
 
-const DEFAULT_API_URL = "https://api.ente.io";
+const DEFAULT_API_URL = "https://api.ente.io/";
 let apiBaseUrl = DEFAULT_API_URL;
 
 /**
  * Set the API base URL. Pass empty string or undefined to reset to default.
  */
 export const setApiBaseUrl = (url?: string): void => {
-    apiBaseUrl = url && url.trim() ? url.trim().replace(/\/+$/, "") : DEFAULT_API_URL;
+    apiBaseUrl = url && url.trim() ? url.trim().replace(/\/*$/, '/') : DEFAULT_API_URL;
 };
 
 /**
@@ -99,7 +99,7 @@ const AuthenticatorEntityDiffResponse = z.object({
 export const getAuthenticatorEntityKey = async (
     token: string
 ): Promise<AuthenticatorEntityKey | undefined> => {
-    const url = buildApiUrl("/authenticator/key");
+    const url = buildApiUrl("authenticator/key");
 
     try {
         const response = await authenticatedFetch(url, token);
@@ -155,7 +155,7 @@ const fetchAuthenticatorEntities = async (
     let timeOffset: number | undefined = undefined;
 
     while (true) {
-        const url = buildApiUrl("/authenticator/entity/diff", {
+        const url = buildApiUrl("authenticator/entity/diff", {
             sinceTime,
             limit: batchSize,
         });
@@ -274,7 +274,7 @@ export const createAuthenticatorEntity = async (
     token: string,
     request: CreateEntityRequest
 ): Promise<{ id: string }> => {
-    const url = buildApiUrl("/authenticator/entity");
+    const url = buildApiUrl("authenticator/entity");
     const response = await authenticatedFetch(url, token, {
         method: "POST",
         headers: {
@@ -292,7 +292,7 @@ export const updateAuthenticatorEntity = async (
     token: string,
     request: UpdateEntityRequest
 ): Promise<void> => {
-    const url = buildApiUrl("/authenticator/entity");
+    const url = buildApiUrl("authenticator/entity");
     await authenticatedFetch(url, token, {
         method: "PUT",
         headers: {
@@ -309,7 +309,7 @@ export const deleteAuthenticatorEntity = async (
     token: string,
     id: string
 ): Promise<void> => {
-    const url = buildApiUrl("/authenticator/entity", { id });
+    const url = buildApiUrl("authenticator/entity", { id });
     await authenticatedFetch(url, token, {
         method: "DELETE",
     });
