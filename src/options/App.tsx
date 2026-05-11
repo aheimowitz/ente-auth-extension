@@ -301,6 +301,7 @@ export const App: React.FC = () => {
                             <label>Auto-fill single match</label>
                             <p>
                                 Automatically fill and submit when only one code matches.
+                                When off, the list opens automatically on MFA fields, including when no codes match (so you can search all codes).
                             </p>
                         </div>
                         <label className="toggle">
