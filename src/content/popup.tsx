@@ -641,7 +641,9 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
     autoFillSingleMatch,
     domain,
 }) => {
-    const shouldAutoOpenDropdown = matches.length > 0 && !(autoFillSingleMatch && matches.length === 1);
+    const shouldAutoOpenDropdown =
+        !(autoFillSingleMatch && matches.length === 1) &&
+        (matches.length > 0 || !autoFillSingleMatch);
     const [isOpen, setIsOpen] = useState(() => shouldAutoOpenDropdown);
     const [theme, setTheme] = useState<ResolvedTheme>("dark");
     const containerRef = useRef<HTMLDivElement>(null);
