@@ -62,7 +62,7 @@ export const verifySRP = async (
 
     // Step 1: Send A, obtain B and sessionID
     const srpA = bufferToB64(srpClient.computeA());
-    const createSessionRes = await fetch(`${apiUrl}/users/srp/create-session`, {
+    const createSessionRes = await fetch(new URL("users/srp/create-session", apiUrl).toString(), {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
@@ -84,7 +84,7 @@ export const verifySRP = async (
     const srpM1 = bufferToB64(srpClient.computeM1());
 
     // Step 3: Send M1, obtain M2 and rest of the response
-    const verifySessionRes = await fetch(`${apiUrl}/users/srp/verify-session`, {
+    const verifySessionRes = await fetch(new URL("users/srp/verify-session", apiUrl).toString(), {
         method: "POST",
         headers: {
             "Content-Type": "application/json",

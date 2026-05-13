@@ -20,7 +20,7 @@ export const getSRPAttributes = async (
     apiUrl: string,
     email: string,
 ): Promise<SRPAttributes | undefined> => {
-    const url = new URL("/users/srp/attributes", apiUrl);
+    const url = new URL("users/srp/attributes", apiUrl);
     url.searchParams.set("email", email);
 
     const res = await fetch(url.toString(), {
@@ -44,7 +44,7 @@ export const requestEmailOTT = async (
     apiUrl: string,
     email: string,
 ): Promise<void> => {
-    const res = await fetch(`${apiUrl}/users/ott`, {
+    const res = await fetch(new URL("users/ott", apiUrl).toString(), {
         method: "POST",
         headers: publicHeaders,
         body: JSON.stringify({ email, purpose: "login" }),
@@ -63,7 +63,7 @@ export const verifyEmail = async (
     email: string,
     ott: string,
 ): Promise<EmailVerificationResponse> => {
-    const res = await fetch(`${apiUrl}/users/verify-email`, {
+    const res = await fetch(new URL("users/verify-email", apiUrl).toString(), {
         method: "POST",
         headers: publicHeaders,
         body: JSON.stringify({ email, ott }),
@@ -83,7 +83,7 @@ export const verifyTwoFactor = async (
     sessionID: string,
     code: string,
 ): Promise<TwoFactorAuthorizationResponse> => {
-    const res = await fetch(`${apiUrl}/users/two-factor/verify`, {
+    const res = await fetch(new URL("users/two-factor/verify", apiUrl).toString(), {
         method: "POST",
         headers: publicHeaders,
         body: JSON.stringify({ code, sessionID }),
@@ -104,8 +104,9 @@ export const checkPasskeyVerificationStatus = async (
     apiUrl: string,
     sessionID: string,
 ): Promise<TwoFactorAuthorizationResponse | undefined> => {
-    const url = `${apiUrl}/users/two-factor/passkeys/get-token?sessionID=${encodeURIComponent(sessionID)}`;
-    const res = await fetch(url, { headers: publicHeaders });
+    const url = new URL("users/two-factor/passkeys/get-token", apiUrl);
+    url.searchParams.set("sessionID", sessionID);
+    const res = await fetch(url.toString(), { headers: publicHeaders });
     if (res.status === 400) return undefined; // Still pending
     if (res.status === 404 || res.status === 410) {
         throw new Error("Passkey verification session expired. Please try again.");
