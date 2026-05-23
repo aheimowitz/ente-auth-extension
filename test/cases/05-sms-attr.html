@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>5. SMS — name="sms-code"</title>
+    <link rel="stylesheet" href="_shared.css" />
+</head>
+<body>
+    <a class="back" href="../index.html">&larr; Back to index</a>
+    <h1>5. SMS &mdash; name="sms-code"</h1>
+    <div class="expect no">Should NOT show icon &mdash; input name contains "sms"</div>
+
+    <label for="sms-2">Enter your code</label>
+    <input
+        id="sms-2"
+        name="sms-code"
+        class="single"
+        type="text"
+        inputmode="numeric"
+        maxlength="6"
+    />
+
+    <p class="hint">name="sms-code" &mdash; attribute-level SMS exclusion.</p>
+</body>
+</html>

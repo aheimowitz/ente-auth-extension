@@ -9,7 +9,7 @@ import { generateOTPs, getProgress } from "@shared/otp";
 import { prettyFormatCode } from "@shared/code";
 import { getResolvedTheme } from "@shared/useTheme";
 import { browser, sendMessage } from "@shared/browser";
-import type { Code, DomainMatch } from "@shared/types";
+import type { AuthState, Code, DomainMatch } from "@shared/types";
 
 type ResolvedTheme = "light" | "dark";
 
@@ -624,6 +624,216 @@ const Dropdown: React.FC<DropdownProps> = ({
     );
 };
 
+interface AuthPromptDropdownProps {
+    needsLogin: boolean;
+    onClose: () => void;
+    theme: ResolvedTheme;
+}
+
+const AuthPromptDropdown: React.FC<AuthPromptDropdownProps> = ({
+    needsLogin,
+    onClose,
+    theme,
+}) => {
+    const [password, setPassword] = useState("");
+    const [error, setError] = useState<string | null>(null);
+    const [submitting, setSubmitting] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const passwordInputRef = useRef<HTMLInputElement>(null);
+
+    // Close on outside click
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+                onClose();
+            }
+        };
+        const timeoutId = setTimeout(() => {
+            document.addEventListener("mousedown", handleClickOutside, false);
+        }, 100);
+        return () => {
+            clearTimeout(timeoutId);
+            document.removeEventListener("mousedown", handleClickOutside, false);
+        };
+    }, [onClose]);
+
+    // Focus password input when prompting for unlock
+    useEffect(() => {
+        if (!needsLogin && passwordInputRef.current) {
+            setTimeout(() => passwordInputRef.current?.focus(), 100);
+        }
+    }, [needsLogin]);
+
+    const handleLogin = async () => {
+        await sendMessage({ type: "OPEN_LOGIN_PAGE" });
+        onClose();
+    };
+
+    const handleUnlock = async () => {
+        if (!password.trim() || submitting) return;
+        setError(null);
+        setSubmitting(true);
+        try {
+            const res = await sendMessage<{ success: boolean; error?: string }>({
+                type: "UNLOCK",
+                password,
+            });
+            if (res?.success) {
+                setPassword("");
+                // storage.onChanged in the content script will refresh the icon
+                onClose();
+            } else {
+                setError(res?.error || "Invalid password");
+            }
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Failed to unlock");
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const colors = themeColors[theme];
+
+    const styles: Record<string, React.CSSProperties> = {
+        dropdown: {
+            position: "absolute",
+            top: "100%",
+            right: 0,
+            marginTop: "4px",
+            minWidth: "280px",
+            maxWidth: "320px",
+            backgroundColor: colors.background,
+            borderRadius: "8px",
+            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
+            border: `1px solid ${colors.stroke}`,
+            overflow: "hidden",
+            zIndex: 2147483647,
+            fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        },
+        header: {
+            display: "flex",
+            alignItems: "center",
+            padding: "12px 16px",
+            borderBottom: `1px solid ${colors.stroke}`,
+            gap: "8px",
+            backgroundColor: colors.background,
+        },
+        headerText: {
+            fontSize: "14px",
+            fontWeight: 600,
+            color: colors.textPrimary,
+            flex: 1,
+        },
+        body: {
+            padding: "16px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "12px",
+        },
+        message: {
+            fontSize: "13px",
+            color: colors.textMuted,
+            lineHeight: 1.45,
+            margin: 0,
+        },
+        input: {
+            width: "100%",
+            padding: "8px 12px",
+            fontSize: "14px",
+            border: `1px solid ${colors.stroke}`,
+            borderRadius: "6px",
+            backgroundColor: colors.background,
+            color: colors.textPrimary,
+            outline: "none",
+            boxSizing: "border-box",
+        },
+        button: {
+            width: "100%",
+            padding: "10px 16px",
+            fontSize: "14px",
+            fontWeight: 600,
+            color: "#FFFFFF",
+            backgroundColor: colors.accentPurple,
+            border: "none",
+            borderRadius: "6px",
+            cursor: "pointer",
+            opacity: submitting ? 0.6 : 1,
+        },
+        error: {
+            fontSize: "12px",
+            color: "#E57373",
+            margin: 0,
+        },
+    };
+
+    return (
+        <div ref={dropdownRef} style={styles.dropdown}>
+            <div style={styles.header}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <path
+                        d="M12 2L3 7V12C3 16.97 6.84 21.66 12 23C17.16 21.66 21 16.97 21 12V7L12 2Z"
+                        fill="#8F33D6"
+                    />
+                    <path
+                        d="M10 17L6 13L7.41 11.59L10 14.17L16.59 7.58L18 9L10 17Z"
+                        fill="white"
+                    />
+                </svg>
+                <span style={styles.headerText}>
+                    {needsLogin ? "Ente Auth Extension" : "Vault Locked"}
+                </span>
+            </div>
+            {needsLogin ? (
+                <div style={styles.body}>
+                    <p style={styles.message}>
+                        Sign in to your Ente account to autofill 2FA codes.
+                    </p>
+                    <button
+                        type="button"
+                        style={styles.button}
+                        onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleLogin();
+                        }}
+                    >
+                        Log in
+                    </button>
+                </div>
+            ) : (
+                <form
+                    style={styles.body}
+                    onSubmit={(e) => {
+                        e.preventDefault();
+                        handleUnlock();
+                    }}
+                >
+                    <p style={styles.message}>
+                        Enter your password to unlock your auth codes.
+                    </p>
+                    <input
+                        ref={passwordInputRef}
+                        type="password"
+                        placeholder="Password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        style={styles.input}
+                        disabled={submitting}
+                    />
+                    {error && <p style={styles.error}>{error}</p>}
+                    <button
+                        type="submit"
+                        style={styles.button}
+                        disabled={!password.trim() || submitting}
+                    >
+                        {submitting ? "Unlocking..." : "Unlock"}
+                    </button>
+                </form>
+            )}
+        </div>
+    );
+};
+
 interface AutofillIconProps {
     matches: DomainMatch[];
     timeOffset: number;
@@ -631,6 +841,7 @@ interface AutofillIconProps {
     inputElement: HTMLInputElement;
     autoFillSingleMatch: boolean;
     domain: string;
+    authState?: AuthState;
 }
 
 const AutofillIcon: React.FC<AutofillIconProps> = ({
@@ -640,8 +851,14 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
     inputElement,
     autoFillSingleMatch,
     domain,
+    authState,
 }) => {
+    // Treat unknown auth state as authenticated so we never block on a missing field.
+    const isAuthenticated = !authState || (authState.isLoggedIn && authState.isUnlocked);
+    const needsLogin = !!authState && !authState.isLoggedIn;
+
     const shouldAutoOpenDropdown =
+        isAuthenticated &&
         !(autoFillSingleMatch && matches.length === 1) &&
         (matches.length > 0 || !autoFillSingleMatch);
     const [isOpen, setIsOpen] = useState(() => shouldAutoOpenDropdown);
@@ -655,7 +872,7 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
 
     // Auto-fill if single match and setting enabled
     useEffect(() => {
-        if (autoFillSingleMatch && matches.length === 1) {
+        if (isAuthenticated && autoFillSingleMatch && matches.length === 1) {
             const { code } = matches[0]!;
             const [otp] = generateOTPs(code, timeOffset);
             // Small delay to let the UI render
@@ -663,7 +880,7 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
                 onFill(otp);
             }, 100);
         }
-    }, [matches, timeOffset, onFill, autoFillSingleMatch]);
+    }, [matches, timeOffset, onFill, autoFillSingleMatch, isAuthenticated]);
 
     const handleIconClick = (e: React.MouseEvent) => {
         e.preventDefault();
@@ -676,7 +893,11 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
         setIsOpen(false);
     };
 
-    const colors = themeColors[theme];
+    const iconTitle = isAuthenticated
+        ? "Ente Auth Extension - Click to autofill"
+        : needsLogin
+            ? "Ente Auth Extension - Click to log in"
+            : "Ente Auth Extension - Click to unlock";
 
     const styles: Record<string, React.CSSProperties> = {
         container: {
@@ -700,6 +921,12 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
             boxShadow: "0 2px 6px rgba(0, 0, 0, 0.25)",
             overflow: "hidden",
         },
+        iconImage: {
+            borderRadius: "4px",
+            filter: isAuthenticated ? "none" : "grayscale(1)",
+            opacity: isAuthenticated ? 1 : 0.5,
+            transition: "filter 0.15s, opacity 0.15s",
+        },
     };
 
     return (
@@ -713,7 +940,7 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
                 onMouseLeave={(e) => {
                     (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)";
                 }}
-                title="Ente Auth Extension - Click to autofill"
+                title={iconTitle}
             >
                 {/* Use the same PNG icon as extension toolbar */}
                 <img
@@ -721,10 +948,10 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
                     alt="Ente Auth Extension"
                     width="20"
                     height="20"
-                    style={{ borderRadius: "4px" }}
+                    style={styles.iconImage}
                 />
             </button>
-            {isOpen && (
+            {isOpen && isAuthenticated && (
                 <Dropdown
                     matches={matches}
                     timeOffset={timeOffset}
@@ -732,6 +959,13 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
                     onClose={() => setIsOpen(false)}
                     theme={theme}
                     domain={domain}
+                />
+            )}
+            {isOpen && !isAuthenticated && (
+                <AuthPromptDropdown
+                    needsLogin={needsLogin}
+                    onClose={() => setIsOpen(false)}
+                    theme={theme}
                 />
             )}
         </div>
@@ -749,20 +983,27 @@ let iconWrapper: HTMLDivElement | null = null;
 let shadowHost: ShadowHostWithCleanup | null = null;
 
 /**
- * Position the icon inside the input field.
+ * Position the icon relative to an anchor input.
+ * - "inside": overlay on the right edge of the input (default for single inputs).
+ * - "outside": place to the right of the input with a small gap (used for
+ *   split single-digit inputs that are too narrow for an inset icon).
  */
-const positionIcon = (inputElement: HTMLInputElement): void => {
+const positionIcon = (
+    anchorElement: HTMLInputElement,
+    placement: "inside" | "outside" = "inside"
+): void => {
     if (!shadowHost) return;
 
-    const rect = inputElement.getBoundingClientRect();
+    const rect = anchorElement.getBoundingClientRect();
     const scrollX = window.scrollX;
     const scrollY = window.scrollY;
 
-    // Position to the right side inside the input (24px icon + 4px padding)
     const iconSize = 24;
     const padding = 4;
     const top = rect.top + scrollY + (rect.height - iconSize) / 2;
-    const left = rect.right + scrollX - iconSize - padding;
+    const left = placement === "outside"
+        ? rect.right + scrollX + padding
+        : rect.right + scrollX - iconSize - padding;
 
     shadowHost.style.position = "absolute";
     shadowHost.style.top = `${top}px`;
@@ -778,7 +1019,9 @@ export const showPopup = (
     timeOffset: number,
     onFill: (code: string) => void,
     inputElement?: HTMLInputElement,
-    autoFillSingleMatch = true
+    autoFillSingleMatch = true,
+    authState?: AuthState,
+    placement: "inside" | "outside" = "inside"
 ): void => {
     // Remove existing icon
     hidePopup();
@@ -809,16 +1052,17 @@ export const showPopup = (
             inputElement={inputElement}
             autoFillSingleMatch={autoFillSingleMatch}
             domain={domain}
+            authState={authState}
         />
     );
 
     document.body.appendChild(shadowHost);
 
     // Position the icon
-    positionIcon(inputElement);
+    positionIcon(inputElement, placement);
 
     // Reposition on scroll/resize
-    const handleReposition = () => positionIcon(inputElement);
+    const handleReposition = () => positionIcon(inputElement, placement);
     window.addEventListener("scroll", handleReposition, true);
     window.addEventListener("resize", handleReposition);
 

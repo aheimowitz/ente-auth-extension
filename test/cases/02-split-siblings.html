@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>2. Six split inputs (siblings)</title>
+    <link rel="stylesheet" href="_shared.css" />
+</head>
+<body>
+    <a class="back" href="../index.html">&larr; Back to index</a>
+    <h1>2. Six split inputs (siblings)</h1>
+    <div class="expect yes">Should show icon next to the LAST box, outside</div>
+
+    <label>Enter the 6-digit authenticator code</label>
+    <div class="split">
+        <input type="text" inputmode="numeric" maxlength="1" />
+        <input type="text" inputmode="numeric" maxlength="1" />
+        <input type="text" inputmode="numeric" maxlength="1" />
+        <input type="text" inputmode="numeric" maxlength="1" />
+        <input type="text" inputmode="numeric" maxlength="1" />
+        <input type="text" inputmode="numeric" maxlength="1" />
+    </div>
+
+    <p class="hint">All inputs are siblings under one flex container.</p>
+    <script src="_split.js"></script>
+</body>
+</html>

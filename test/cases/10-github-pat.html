@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>10. GitHub Personal Access Token (issue #11)</title>
+    <link rel="stylesheet" href="_shared.css" />
+</head>
+<body>
+    <a class="back" href="../index.html">&larr; Back to index</a>
+    <h1>10. GitHub Personal Access Token (issue #11)</h1>
+    <div class="expect no">Should NOT show icon &mdash; this is a developer credential being displayed</div>
+
+    <p style="font-size: 13px; color: #555;">
+        Regression test for
+        <a href="https://github.com/aheimowitz/ente-auth-extension/issues/11" target="_blank">issue #11</a>:
+        the extension was overwriting a freshly-generated GitHub PAT with a 6-digit
+        TOTP code. Two variants below — both should be ignored.
+    </p>
+
+    <h2 style="font-size: 14px; margin-top: 28px;">Variant A: readonly display of generated PAT</h2>
+    <label for="pat-readonly">Make sure to copy your personal access token now. You won't be able to see it again!</label>
+    <input
+        id="pat-readonly"
+        type="text"
+        readonly
+        aria-label="Personal access token"
+        value="ghp_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789"
+        style="width: 100%; font-family: monospace;"
+    />
+    <p class="hint">readonly + aria-label "Personal access token" &mdash; should be excluded by readonly skip and PAT exclusion.</p>
+
+    <h2 style="font-size: 14px; margin-top: 28px;">Variant B: writable token-name input (defensive)</h2>
+    <label for="pat-writable">Token name</label>
+    <input
+        id="pat-writable"
+        name="access-token-name"
+        type="text"
+        placeholder="My API token"
+        style="width: 100%;"
+    />
+    <p class="hint">name contains "access-token" &mdash; should be excluded by PAT exclusion pattern.</p>
+
+    <h2 style="font-size: 14px; margin-top: 28px;">Variant C: API key field</h2>
+    <label for="api-key">API key</label>
+    <input
+        id="api-key"
+        name="api-key"
+        type="text"
+        placeholder="sk-..."
+        style="width: 100%; font-family: monospace;"
+    />
+    <p class="hint">name="api-key" &mdash; should be excluded by API key exclusion pattern.</p>
+</body>
+</html>

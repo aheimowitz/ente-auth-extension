@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>6. Email verification code</title>
+    <link rel="stylesheet" href="_shared.css" />
+</head>
+<body>
+    <a class="back" href="../index.html">&larr; Back to index</a>
+    <h1>6. Email verification code</h1>
+    <div class="expect no">Should NOT show icon &mdash; email delivery</div>
+
+    <label for="email-1">Check your email for a verification code</label>
+    <input
+        id="email-1"
+        class="single"
+        type="text"
+        inputmode="numeric"
+        maxlength="6"
+        autocomplete="one-time-code"
+    />
+
+    <p class="hint">"Check your email" in label even though autocomplete="one-time-code".</p>
+</body>
+</html>

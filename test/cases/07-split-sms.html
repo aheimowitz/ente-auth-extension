@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>7. Six split inputs but for SMS</title>
+    <link rel="stylesheet" href="_shared.css" />
+</head>
+<body>
+    <a class="back" href="../index.html">&larr; Back to index</a>
+    <h1>7. Six split inputs but for SMS</h1>
+    <div class="expect no">Should NOT show icon &mdash; split UI for SMS code</div>
+
+    <label>Enter the code we just texted to your phone</label>
+    <div class="split">
+        <input type="text" inputmode="numeric" maxlength="1" name="sms-1" />
+        <input type="text" inputmode="numeric" maxlength="1" name="sms-2" />
+        <input type="text" inputmode="numeric" maxlength="1" name="sms-3" />
+        <input type="text" inputmode="numeric" maxlength="1" name="sms-4" />
+        <input type="text" inputmode="numeric" maxlength="1" name="sms-5" />
+        <input type="text" inputmode="numeric" maxlength="1" name="sms-6" />
+    </div>
+
+    <p class="hint">Name prefix sms-* + label "we just texted" &mdash; both signals push it to exclusion.</p>
+    <script src="_split.js"></script>
+</body>
+</html>

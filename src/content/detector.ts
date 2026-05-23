@@ -24,7 +24,17 @@ const MFA_ATTRIBUTE_PATTERNS = [
     "verifycode",
     "auth-code",
     "authcode",
-    "token",
+    // Specific *-token combinations only; bare "token" matches too many things
+    // (personal access tokens, API tokens, bearer tokens, CSRF tokens, etc.)
+    "auth-token",
+    "authtoken",
+    "2fa-token",
+    "mfa-token",
+    "otp-token",
+    "totp-token",
+    "twofa-token",
+    "twofactor-token",
+    "two-factor-token",
     "authenticator",
     "security-code",
     "securitycode",
@@ -72,7 +82,142 @@ const EXCLUSION_PATTERNS = [
     "zip-code",
     "phone",
     "mobile",
+    "sms",
+    "sms-code",
+    "smscode",
+    "text-code",
+    "textcode",
+    "text-message",
+    "textmessage",
+    "phone-code",
+    "phonecode",
+    "phone-otp",
+    "phoneotp",
+    "phone-verification",
+    "phone-verify",
+    "email-code",
+    "emailcode",
+    "email-otp",
+    "emailotp",
+    "email-verification",
+    "email-verify",
+    "magic-link",
+    "magiclink",
+    "by-sms",
+    "by-text",
+    "by-email",
+    "via-sms",
+    "via-text",
+    "via-email",
     "sms-marketing",
+    // Developer/API credentials that look superficially like MFA inputs
+    // (e.g. GitHub Personal Access Token displayed in a text field).
+    "personal-access-token",
+    "personalaccesstoken",
+    "personal access token",
+    "access-token",
+    "accesstoken",
+    "access token",
+    "api-token",
+    "apitoken",
+    "api token",
+    "api-key",
+    "apikey",
+    "api key",
+    "bearer-token",
+    "bearertoken",
+    "bearer token",
+    "refresh-token",
+    "refreshtoken",
+    "refresh token",
+    "oauth-token",
+    "oauthtoken",
+    "oauth token",
+    "secret-key",
+    "secretkey",
+    "secret key",
+    "private-key",
+    "privatekey",
+    "private key",
+    "deploy-key",
+    "deploy key",
+    "client-secret",
+    "client secret",
+    "client-id",
+    "client id",
+    "webhook-secret",
+    "webhook secret",
+];
+
+/**
+ * Label/placeholder/nearby-text patterns that indicate the code is delivered
+ * out-of-band (SMS/email/voice) rather than from a TOTP authenticator app.
+ * Checked against labels, placeholders, aria-labels and nearby container text.
+ */
+const OOB_LABEL_PATTERNS = [
+    // English
+    "text message",
+    "sms",
+    "via text",
+    "via sms",
+    "by text",
+    "by sms",
+    "by email",
+    "via email",
+    "by phone",
+    "via phone",
+    "text you",
+    "texted you",
+    "texted to",
+    "text to",
+    "sent to your phone",
+    "sent to your mobile",
+    "sent to your email",
+    "sent you a text",
+    "sent you an email",
+    "sent you an sms",
+    "check your phone",
+    "check your text",
+    "check your email",
+    "check your inbox",
+    "code we sent",
+    "code sent to",
+    "code we emailed",
+    "code we texted",
+    "we just sent",
+    "we've sent",
+    "we have sent",
+    "we'll text",
+    "we will text",
+    "we'll email",
+    "we will email",
+    "phone number ending",
+    "ending in",
+
+    // Spanish
+    "mensaje de texto",
+    "te enviamos un sms",
+    "código enviado",
+    "enviado a tu correo",
+    "enviado a tu teléfono",
+
+    // French
+    "message texte",
+    "par sms",
+    "par e-mail",
+    "envoyé à votre",
+
+    // German
+    "per sms",
+    "per e-mail",
+    "an ihre telefonnummer",
+    "an ihre e-mail",
+
+    // Italian
+    "messaggio di testo",
+    "via sms",
+    "via e-mail",
+    "inviato al tuo",
 ];
 
 /**
@@ -198,12 +343,14 @@ const matchesPattern = (value: string | null, patterns: string[]): boolean => {
 };
 
 /**
- * Calculate confidence score for a single input element.
- * Prioritizes language-agnostic signals (HTML attributes) over text patterns.
+ * Return true if this input is clearly NOT a TOTP field: a non-MFA code (promo,
+ * captcha, postal...), or an out-of-band code (SMS / email / voice) that the
+ * user receives elsewhere and types in manually.
+ *
+ * Used as an early-exit for both single-input and split-input detection so SMS
+ * 6-box UIs don't trigger the autofill icon.
  */
-const calculateConfidence = (input: HTMLInputElement): number => {
-    // First, check for exclusion patterns - if found, definitely not an MFA field
-    // Gather all text from attributes including data-* attributes
+const isExcludedField = (input: HTMLInputElement): boolean => {
     const dataAttrsText = Array.from(input.attributes)
         .filter(attr => attr.name.startsWith("data-"))
         .map(attr => `${attr.name} ${attr.value}`)
@@ -218,24 +365,57 @@ const calculateConfidence = (input: HTMLInputElement): number => {
         dataAttrsText,
     ].filter(Boolean).join(" ");
 
-    if (matchesPattern(inputText, EXCLUSION_PATTERNS)) {
-        return 0;
-    }
+    if (matchesPattern(inputText, EXCLUSION_PATTERNS)) return true;
 
-    // Also check the label for exclusion patterns
     const inputLabel = findLabelForInput(input);
-    if (inputLabel && matchesPattern(inputLabel.textContent, EXCLUSION_PATTERNS)) {
-        return 0;
-    }
+    if (inputLabel && matchesPattern(inputLabel.textContent, EXCLUSION_PATTERNS)) return true;
 
-    // Check container class/id for exclusion patterns
     const inputContainer = input.closest("form, fieldset, [role='group']") || input.parentElement?.parentElement;
     if (inputContainer) {
         const containerText = `${(inputContainer as HTMLElement).id || ""} ${(inputContainer as HTMLElement).className || ""}`;
-        if (matchesPattern(containerText, EXCLUSION_PATTERNS)) {
-            return 0;
+        if (matchesPattern(containerText, EXCLUSION_PATTERNS)) return true;
+    }
+
+    // Out-of-band delivery hints (SMS / email / voice)
+    const placeholder = input.placeholder || "";
+    const ariaLabel = input.getAttribute("aria-label") || "";
+    const labelText = inputLabel?.textContent || "";
+    if (
+        matchesPattern(placeholder, OOB_LABEL_PATTERNS) ||
+        matchesPattern(ariaLabel, OOB_LABEL_PATTERNS) ||
+        matchesPattern(labelText, OOB_LABEL_PATTERNS)
+    ) {
+        return true;
+    }
+
+    const oobDescribedById = input.getAttribute("aria-describedby");
+    if (oobDescribedById) {
+        const describedBy = document.getElementById(oobDescribedById);
+        if (describedBy && matchesPattern(describedBy.textContent, OOB_LABEL_PATTERNS)) {
+            return true;
         }
     }
+
+    // Walk up a few levels of ancestors looking for OOB hints in nearby text.
+    // Capped to avoid scanning huge subtrees.
+    let oobAncestor: HTMLElement | null = input.parentElement;
+    for (let depth = 0; depth < 4 && oobAncestor && oobAncestor !== document.body; depth++) {
+        const nearbyText = oobAncestor.textContent || "";
+        if (matchesPattern(nearbyText.slice(0, 500), OOB_LABEL_PATTERNS)) {
+            return true;
+        }
+        oobAncestor = oobAncestor.parentElement;
+    }
+
+    return false;
+};
+
+/**
+ * Calculate confidence score for a single input element.
+ * Prioritizes language-agnostic signals (HTML attributes) over text patterns.
+ */
+const calculateConfidence = (input: HTMLInputElement): number => {
+    if (isExcludedField(input)) return 0;
 
     let confidence = 0;
 
@@ -383,6 +563,8 @@ const detectSplitInputs = (): MFAFieldDetection | null => {
 
     allInputs.forEach((input) => {
         if (!input.offsetParent) return; // Skip hidden inputs
+        // Skip readonly/disabled — MFA boxes are always interactive
+        if (input.readOnly || input.disabled) return;
 
         if (currentGroup.length === 0) {
             currentGroup.push(input);
@@ -411,9 +593,11 @@ const detectSplitInputs = (): MFAFieldDetection | null => {
         groups.push(currentGroup);
     }
 
-    // Return the first group of 6 inputs
+    // Return the first group of 6 inputs that isn't excluded (SMS / email / promo).
+    // Spot-check the first input — if it carries OOB signals, none of the
+    // siblings in the group are meant for TOTP either.
     for (const group of groups) {
-        if (group.length === 6) {
+        if (group.length === 6 && !isExcludedField(group[0]!)) {
             return {
                 element: group[0]!,
                 confidence: 0.85,
@@ -446,6 +630,10 @@ export const detectMFAFields = (): MFAFieldDetection[] => {
     inputs.forEach((input) => {
         // Skip hidden inputs
         if (!input.offsetParent) return;
+
+        // Skip readonly/disabled — these are display fields (e.g. a generated
+        // GitHub PAT shown back to the user), not MFA prompts.
+        if (input.readOnly || input.disabled) return;
 
         // Skip if already part of a split detection
         if (splitDetection?.splitInputs?.includes(input)) return;

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>3. Six split inputs (each wrapped in a div)</title>
+    <link rel="stylesheet" href="_shared.css" />
+</head>
+<body>
+    <a class="back" href="../index.html">&larr; Back to index</a>
+    <h1>3. Six split inputs (each wrapped in a div)</h1>
+    <div class="expect yes">Should show icon next to the LAST box, outside</div>
+
+    <label>Authenticator app code</label>
+    <div class="split">
+        <div><input type="tel" maxlength="1" /></div>
+        <div><input type="tel" maxlength="1" /></div>
+        <div><input type="tel" maxlength="1" /></div>
+        <div><input type="tel" maxlength="1" /></div>
+        <div><input type="tel" maxlength="1" /></div>
+        <div><input type="tel" maxlength="1" /></div>
+    </div>
+
+    <p class="hint">Each input is wrapped — exercises the "close in DOM" sibling check.</p>
+    <script src="_split.js"></script>
+</body>
+</html>

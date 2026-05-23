@@ -1,0 +1,46 @@
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    max-width: 520px;
+    margin: 40px auto;
+    padding: 0 24px 80px;
+    color: #1a1a1a;
+    background: #fafafa;
+    line-height: 1.5;
+}
+.back {
+    display: inline-block;
+    margin-bottom: 20px;
+    color: #6a1b9a;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+}
+.back:hover { text-decoration: underline; }
+h1 { font-size: 20px; margin: 0 0 4px; }
+.expect {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 24px;
+}
+.expect.yes { color: #2e7d32; }
+.expect.no { color: #c62828; }
+label { display: block; font-size: 13px; margin: 12px 0 6px; color: #333; }
+input[type="text"], input[type="tel"], input[type="number"] {
+    font: inherit;
+    padding: 10px 12px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    box-sizing: border-box;
+}
+input.single { width: 220px; }
+.split { display: flex; gap: 8px; }
+.split input {
+    width: 40px;
+    height: 44px;
+    text-align: center;
+    font-size: 18px;
+    padding: 0;
+}
+.hint { font-size: 12px; color: #666; margin: 16px 0 0; }

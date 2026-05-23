@@ -4,7 +4,7 @@
  */
 import type Browser from "webextension-polyfill";
 import { browser, sendMessage } from "@shared/browser";
-import type { DomainMatch, ExtensionSettings, MFAFieldDetection } from "@shared/types";
+import type { AuthState, DomainMatch, ExtensionSettings, MFAFieldDetection } from "@shared/types";
 import { fillCode } from "./autofill";
 import { getBestMFAField } from "./detector";
 import { hidePopup, showPopup } from "./popup";
@@ -69,6 +69,67 @@ async function sendMessageWithRetry<T>(
 }
 
 /**
+ * Fetch current state from the background and (re)render the icon for the
+ * existing currentDetection. Used both for the initial render and for refreshes
+ * triggered by auth state changes.
+ */
+const renderIconForCurrentDetection = async (): Promise<void> => {
+    if (!currentDetection) return;
+
+    const domain = window.location.hostname;
+
+    try {
+        const settingsResponse = await sendMessageWithRetry<{
+            success: boolean;
+            data?: ExtensionSettings;
+        }>({ type: "GET_SETTINGS" });
+
+        const settings = settingsResponse?.data;
+        if (settings && !settings.showAutofillIcon) {
+            hidePopup();
+            return;
+        }
+
+        const response = await sendMessageWithRetry<{
+            success: boolean;
+            data?: { matches: DomainMatch[]; timeOffset: number; authState?: AuthState };
+            error?: string;
+        }>({
+            type: "GET_CODES_FOR_DOMAIN",
+            domain,
+        });
+
+        const matches = response?.data?.matches || [];
+        const timeOffset = response?.data?.timeOffset || 0;
+        const authState = response?.data?.authState;
+        const autoFillSingleMatch = settings?.autoFillSingleMatch ?? true;
+
+        // For split-input detections (one digit per box), anchor the icon to
+        // the LAST input and place it outside since the individual boxes are
+        // too narrow for an inset icon.
+        const isSplit = currentDetection.type === "split" && !!currentDetection.splitInputs?.length;
+        const anchorElement = isSplit
+            ? currentDetection.splitInputs![currentDetection.splitInputs!.length - 1]!
+            : currentDetection.element;
+        const placement: "inside" | "outside" = isSplit ? "outside" : "inside";
+
+        showPopup(matches, timeOffset, (otp: string) => {
+            if (currentDetection) {
+                fillCode(currentDetection, otp);
+            }
+        }, anchorElement, autoFillSingleMatch, authState, placement);
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (errorMessage.includes("Could not establish connection") ||
+            errorMessage.includes("Receiving end does not exist") ||
+            errorMessage.includes("Extension context invalidated")) {
+            return;
+        }
+        console.error("[Ente Auth] Error rendering autofill icon:", error);
+    }
+};
+
+/**
  * Check for MFA fields and show popup if matches found.
  */
 const checkForMFAFields = async (): Promise<void> => {
@@ -80,58 +141,17 @@ const checkForMFAFields = async (): Promise<void> => {
     if (!detection) return;
 
     currentDetection = detection;
+    await renderIconForCurrentDetection();
+    hasShownPopup = true;
+};
 
-    // Get current domain
-    const domain = window.location.hostname;
-
-    try {
-        // Get settings to check if autofill icon is enabled
-        const settingsResponse = await sendMessageWithRetry<{
-            success: boolean;
-            data?: ExtensionSettings;
-        }>({ type: "GET_SETTINGS" });
-
-        const settings = settingsResponse?.data;
-        if (settings && !settings.showAutofillIcon) {
-            return;
-        }
-
-        // Get matching codes from background
-        const response = await sendMessageWithRetry<{
-            success: boolean;
-            data?: { matches: DomainMatch[]; timeOffset: number };
-            error?: string;
-        }>({
-            type: "GET_CODES_FOR_DOMAIN",
-            domain,
-        });
-
-        // Show popup with matches (or empty if not logged in)
-        const matches = response?.data?.matches || [];
-        const timeOffset = response?.data?.timeOffset || 0;
-        const autoFillSingleMatch = settings?.autoFillSingleMatch ?? true;
-
-        // Show popup with matches (or no matches message)
-        showPopup(matches, timeOffset, (otp: string) => {
-            if (currentDetection) {
-                fillCode(currentDetection, otp);
-            }
-        }, currentDetection.element, autoFillSingleMatch);
-        hasShownPopup = true;
-    } catch (error) {
-        // Categorize errors for appropriate handling
-        const errorMessage = error instanceof Error ? error.message : String(error);
-
-        // Silently ignore connection errors (extension not ready, service worker sleeping)
-        if (errorMessage.includes("Could not establish connection") ||
-            errorMessage.includes("Receiving end does not exist") ||
-            errorMessage.includes("Extension context invalidated")) {
-            return;
-        }
-
-        // Log actual unexpected errors
-        console.error("[Ente Auth] Error checking for MFA fields:", error);
-    }
+/**
+ * Re-render the icon (preserving the existing detection) when auth state
+ * changes — e.g. the user just logged in or unlocked from the popup/tab.
+ */
+const refreshIcon = (): void => {
+    if (!currentDetection || !isDetectionValid()) return;
+    void renderIconForCurrentDetection();
 };
 
 /**
@@ -160,6 +180,18 @@ const handleMessage = (
     return false;
 };
 
+// Storage keys whose changes mean the user logged in/out, locked, or unlocked
+// the vault and the inline icon needs to update its state.
+const AUTH_RELATED_STORAGE_KEYS = new Set([
+    "authToken",
+    "keyAttributes",
+    "masterKey",
+    "masterKeySession",
+    // Firefox MV2 fallback prefix used by sessionStore
+    "session_masterKey",
+    "session_masterKeySession",
+]);
+
 /**
  * Initialize the content script.
  */
@@ -170,6 +202,19 @@ const init = (): void => {
     browser.runtime.onMessage.addListener(
         handleMessage as Parameters<typeof browser.runtime.onMessage.addListener>[0]
     );
+
+    // Refresh the icon when auth state changes (login / unlock / lock / logout
+    // happening in the popup or another tab).
+    try {
+        browser.storage.onChanged.addListener((changes) => {
+            const keys = Object.keys(changes);
+            if (keys.some((k) => AUTH_RELATED_STORAGE_KEYS.has(k))) {
+                refreshIcon();
+            }
+        });
+    } catch (e) {
+        console.warn("[Ente Auth] storage.onChanged listener unavailable:", e);
+    }
 
     // Initial check
     debouncedCheck();

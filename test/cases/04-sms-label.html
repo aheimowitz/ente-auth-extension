@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>4. SMS — label says "text message"</title>
+    <link rel="stylesheet" href="_shared.css" />
+</head>
+<body>
+    <a class="back" href="../index.html">&larr; Back to index</a>
+    <h1>4. SMS &mdash; label says "text message"</h1>
+    <div class="expect no">Should NOT show icon &mdash; SMS, not TOTP</div>
+
+    <label for="sms-1">We sent a text message with a 6-digit code to your phone ending in 1234</label>
+    <input
+        id="sms-1"
+        class="single"
+        type="text"
+        inputmode="numeric"
+        maxlength="6"
+        placeholder="123456"
+    />
+
+    <p class="hint">Label contains "text message" + "sent to your phone" &mdash; OOB exclusion.</p>
+</body>
+</html>

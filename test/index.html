@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ente Auth Extension — detector fixtures</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 720px;
+            margin: 40px auto;
+            padding: 0 24px 80px;
+            color: #1a1a1a;
+            background: #fafafa;
+            line-height: 1.55;
+        }
+        h1 { font-size: 22px; margin-bottom: 4px; }
+        h1 + p { color: #666; margin-top: 0; font-size: 13px; }
+        ul { list-style: none; padding: 0; }
+        li {
+            background: white;
+            border: 1px solid #e3e3e3;
+            border-radius: 8px;
+            padding: 14px 18px;
+            margin: 10px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+        }
+        a { color: #6a1b9a; text-decoration: none; font-weight: 600; flex: 1; }
+        a:hover { text-decoration: underline; }
+        .badge {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            padding: 4px 8px;
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+        .yes { background: #e8f5e9; color: #2e7d32; }
+        .no  { background: #ffebee; color: #c62828; }
+        .desc { font-size: 12px; color: #777; margin-top: 2px; font-weight: 400; }
+    </style>
+</head>
+<body>
+    <h1>Ente Auth Extension — detector fixtures</h1>
+    <p>Each link opens one isolated test case. Green = icon should appear. Red = icon should NOT appear.</p>
+
+    <ul>
+        <li>
+            <div>
+                <a href="cases/01-single-totp.html">1. Single 6-digit TOTP input</a>
+                <div class="desc">autocomplete="one-time-code", inputmode="numeric"</div>
+            </div>
+            <span class="badge yes">Show</span>
+        </li>
+        <li>
+            <div>
+                <a href="cases/02-split-siblings.html">2. Six split inputs (siblings)</a>
+                <div class="desc">Icon should sit OUTSIDE, right of the LAST box</div>
+            </div>
+            <span class="badge yes">Show</span>
+        </li>
+        <li>
+            <div>
+                <a href="cases/03-split-wrapped.html">3. Six split inputs (each wrapped in a div)</a>
+                <div class="desc">Exercises the "close in DOM" sibling check</div>
+            </div>
+            <span class="badge yes">Show</span>
+        </li>
+        <li>
+            <div>
+                <a href="cases/04-sms-label.html">4. SMS — label says "text message"</a>
+                <div class="desc">OOB exclusion via label text</div>
+            </div>
+            <span class="badge no">Hide</span>
+        </li>
+        <li>
+            <div>
+                <a href="cases/05-sms-attr.html">5. SMS — name="sms-code"</a>
+                <div class="desc">Attribute-level SMS exclusion</div>
+            </div>
+            <span class="badge no">Hide</span>
+        </li>
+        <li>
+            <div>
+                <a href="cases/06-email.html">6. Email verification code</a>
+                <div class="desc">OOB exclusion overrides autocomplete="one-time-code"</div>
+            </div>
+            <span class="badge no">Hide</span>
+        </li>
+        <li>
+            <div>
+                <a href="cases/07-split-sms.html">7. Six split inputs but for SMS</a>
+                <div class="desc">Split UI + SMS signals — should still be excluded</div>
+            </div>
+            <span class="badge no">Hide</span>
+        </li>
+        <li>
+            <div>
+                <a href="cases/08-promo.html">8. Promo code (regression check)</a>
+                <div class="desc">Pre-existing promo/coupon exclusion</div>
+            </div>
+            <span class="badge no">Hide</span>
+        </li>
+        <li>
+            <div>
+                <a href="cases/09-plain.html">9. Plain numeric input (regression check)</a>
+                <div class="desc">Detector shouldn't trigger on any numeric input</div>
+            </div>
+            <span class="badge no">Hide</span>
+        </li>
+        <li>
+            <div>
+                <a href="cases/10-github-pat.html">10. GitHub Personal Access Token (issue #11)</a>
+                <div class="desc">Readonly PAT display, access-token / API key inputs</div>
+            </div>
+            <span class="badge no">Hide</span>
+        </li>
+    </ul>
+</body>
+</html>

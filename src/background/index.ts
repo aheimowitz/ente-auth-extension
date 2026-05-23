@@ -181,13 +181,14 @@ const handleMessage = async (
         }
 
         case "GET_CODES_FOR_DOMAIN": {
+            const authState = await getAuthState();
             const codes = await getCodes();
             // Load and set custom mappings before matching
             const customMappings = await customMappingsStorage.getMappings();
             setCustomMappings(customMappings);
             const matches = matchCodesToDomain(codes, message.domain);
             const timeOffset = await getTimeOffset();
-            return { success: true, data: { matches, timeOffset } };
+            return { success: true, data: { matches, timeOffset, authState } };
         }
 
         case "SYNC_CODES": {

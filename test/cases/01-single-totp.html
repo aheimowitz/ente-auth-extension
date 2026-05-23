@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>1. Single 6-digit TOTP input</title>
+    <link rel="stylesheet" href="_shared.css" />
+</head>
+<body>
+    <a class="back" href="../index.html">&larr; Back to index</a>
+    <h1>1. Single 6-digit TOTP input</h1>
+    <div class="expect yes">Should show icon (inside, right edge)</div>
+
+    <label for="totp-1">Verification code</label>
+    <input
+        id="totp-1"
+        class="single"
+        type="text"
+        inputmode="numeric"
+        autocomplete="one-time-code"
+        maxlength="6"
+        pattern="[0-9]{6}"
+        placeholder="123456"
+    />
+
+    <p class="hint">autocomplete="one-time-code", maxlength=6, label says "Verification code".</p>
+</body>
+</html>
