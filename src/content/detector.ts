@@ -556,54 +556,115 @@ const findLabelForInput = (input: HTMLInputElement): HTMLLabelElement | null => 
 };
 
 /**
+ * Find the lowest common ancestor of two DOM elements within a reasonable depth.
+ */
+const findCommonAncestor = (a: HTMLElement, b: HTMLElement, maxDepth = 6): HTMLElement | null => {
+    const ancestors = new Set<HTMLElement>();
+    let node: HTMLElement | null = a;
+    for (let i = 0; i < maxDepth && node; i++) {
+        ancestors.add(node);
+        node = node.parentElement;
+    }
+    node = b;
+    for (let i = 0; i < maxDepth && node; i++) {
+        if (ancestors.has(node)) return node;
+        node = node.parentElement;
+    }
+    return null;
+};
+
+/**
+ * Check if two inputs are visually adjacent (on the same horizontal row and
+ * close together). This handles deeply nested DOM structures where structural
+ * checks (sibling/parent) fail.
+ */
+const areVisuallyAdjacent = (a: HTMLInputElement, b: HTMLInputElement): boolean => {
+    const rectA = a.getBoundingClientRect();
+    const rectB = b.getBoundingClientRect();
+
+    // Must be on roughly the same vertical line (within 20px tolerance)
+    if (Math.abs(rectA.top - rectB.top) > 20) return false;
+
+    // Horizontal gap should be reasonable (less than 80px apart)
+    const gap = rectB.left - (rectA.left + rectA.width);
+    if (gap < -5 || gap > 80) return false;
+
+    return true;
+};
+
+/**
  * Detect split OTP inputs (6 adjacent single-character inputs).
+ * Uses a combination of DOM structure and visual position to handle
+ * deeply-nested wrappers common in modern frameworks.
  */
 const detectSplitInputs = (): MFAFieldDetection | null => {
+    // Broader selector: also match inputs without maxlength that are very
+    // narrow (styled to accept a single character), or inputs with size="1"
     const allInputs = document.querySelectorAll<HTMLInputElement>(
-        'input[maxlength="1"][type="text"], input[maxlength="1"][type="tel"], input[maxlength="1"][type="number"], input[maxlength="1"]:not([type])'
+        'input[maxlength="1"][type="text"], input[maxlength="1"][type="tel"], input[maxlength="1"][type="number"], input[maxlength="1"]:not([type]), input[maxlength="2"][type="text"], input[maxlength="2"][type="tel"], input[maxlength="2"]:not([type])'
     );
 
-    // Find groups of 6 adjacent inputs
+    // Collect visible, interactive single-char inputs
+    const candidates: HTMLInputElement[] = [];
+    allInputs.forEach((input) => {
+        if (!input.offsetParent) return; // Skip hidden inputs
+        if (input.readOnly || input.disabled) return;
+        // For maxlength="2" inputs, also check if they're narrow (< 50px)
+        // which suggests they're single-digit OTP boxes
+        if (input.maxLength === 2) {
+            const rect = input.getBoundingClientRect();
+            if (rect.width > 50) return;
+        }
+        candidates.push(input);
+    });
+
+    // Find groups of 4-8 adjacent inputs using both DOM and visual proximity
     const groups: HTMLInputElement[][] = [];
     let currentGroup: HTMLInputElement[] = [];
 
-    allInputs.forEach((input) => {
-        if (!input.offsetParent) return; // Skip hidden inputs
-        // Skip readonly/disabled — MFA boxes are always interactive
-        if (input.readOnly || input.disabled) return;
+    for (let i = 0; i < candidates.length; i++) {
+        const input = candidates[i]!;
 
         if (currentGroup.length === 0) {
             currentGroup.push(input);
-        } else {
-            const lastInput = currentGroup[currentGroup.length - 1]!;
-            // Check if inputs are siblings or close in DOM
-            const isSibling =
-                lastInput.nextElementSibling === input ||
-                lastInput.parentElement === input.parentElement;
-            const isClose =
-                lastInput.parentElement?.parentElement ===
-                input.parentElement?.parentElement;
-
-            if (isSibling || isClose) {
-                currentGroup.push(input);
-            } else {
-                if (currentGroup.length >= 6) {
-                    groups.push(currentGroup);
-                }
-                currentGroup = [input];
-            }
+            continue;
         }
-    });
 
-    if (currentGroup.length >= 6) {
+        const lastInput = currentGroup[currentGroup.length - 1]!;
+
+        // Check structural proximity (DOM-based)
+        const isSibling =
+            lastInput.nextElementSibling === input ||
+            lastInput.parentElement === input.parentElement;
+        const hasCommonAncestor = findCommonAncestor(lastInput, input, 6) !== null;
+
+        // Check visual proximity (position-based)
+        const isVisuallyClose = areVisuallyAdjacent(lastInput, input);
+
+        if (isSibling || (hasCommonAncestor && isVisuallyClose) || isVisuallyClose) {
+            currentGroup.push(input);
+        } else {
+            if (currentGroup.length >= 4 && currentGroup.length <= 8) {
+                groups.push(currentGroup);
+            }
+            currentGroup = [input];
+        }
+    }
+
+    if (currentGroup.length >= 4 && currentGroup.length <= 8) {
         groups.push(currentGroup);
     }
 
-    // Return the first group of 6 inputs that isn't excluded (SMS / email / promo).
-    // Spot-check the first input — if it carries OOB signals, none of the
-    // siblings in the group are meant for TOTP either.
+    // Prefer groups of exactly 6 (most common OTP length), then 4, then others
+    groups.sort((a, b) => {
+        const preferredA = a.length === 6 ? 0 : a.length === 4 ? 1 : 2;
+        const preferredB = b.length === 6 ? 0 : b.length === 4 ? 1 : 2;
+        return preferredA - preferredB;
+    });
+
+    // Return the first valid group that isn't excluded (SMS / email / promo).
     for (const group of groups) {
-        if (group.length === 6 && !isExcludedField(group[0]!)) {
+        if (!isExcludedField(group[0]!)) {
             return {
                 element: group[0]!,
                 confidence: 0.85,
