@@ -233,14 +233,62 @@ export const settingsStorage = {
 };
 
 /**
- * Custom domain mappings storage.
+ * Sync storage operations (synced across devices via browser account).
+ * Falls back to local storage if sync storage is not available.
+ */
+export const syncStore = {
+    async get<T>(key: string): Promise<T | undefined> {
+        if (browser.storage.sync) {
+            const result = await browser.storage.sync.get(key);
+            return result[key] as T | undefined;
+        }
+        // Fallback to local storage
+        return localStore.get<T>(key);
+    },
+
+    async set(key: string, value: unknown): Promise<void> {
+        if (browser.storage.sync) {
+            await browser.storage.sync.set({ [key]: value });
+        } else {
+            await localStore.set(key, value);
+        }
+    },
+
+    async remove(key: string): Promise<void> {
+        if (browser.storage.sync) {
+            await browser.storage.sync.remove(key);
+        } else {
+            await localStore.remove(key);
+        }
+    },
+};
+
+/**
+ * Custom domain mappings storage (synced across devices).
  */
 export const customMappingsStorage = {
     async getMappings(): Promise<CustomDomainMapping[]> {
-        const mappings = await localStore.get<CustomDomainMapping[]>(
+        // Try sync storage first
+        const syncMappings = await syncStore.get<CustomDomainMapping[]>(
             KEYS.CUSTOM_DOMAIN_MAPPINGS
         );
-        return mappings ?? [];
+        if (syncMappings && syncMappings.length > 0) {
+            return syncMappings;
+        }
+
+        // Migrate from local storage if exists (one-time migration)
+        const localMappings = await localStore.get<CustomDomainMapping[]>(
+            KEYS.CUSTOM_DOMAIN_MAPPINGS
+        );
+        if (localMappings && localMappings.length > 0) {
+            // Migrate to sync storage
+            await syncStore.set(KEYS.CUSTOM_DOMAIN_MAPPINGS, localMappings);
+            // Clean up local storage
+            await localStore.remove(KEYS.CUSTOM_DOMAIN_MAPPINGS);
+            return localMappings;
+        }
+
+        return [];
     },
 
     async addMapping(mapping: Omit<CustomDomainMapping, "createdAt">): Promise<void> {
@@ -255,7 +303,7 @@ export const customMappingsStorage = {
             createdAt: Date.now(),
         };
         filtered.push(newMapping);
-        await localStore.set(KEYS.CUSTOM_DOMAIN_MAPPINGS, filtered);
+        await syncStore.set(KEYS.CUSTOM_DOMAIN_MAPPINGS, filtered);
     },
 
     async deleteMapping(domain: string): Promise<void> {
@@ -263,10 +311,11 @@ export const customMappingsStorage = {
         const filtered = mappings.filter(
             (m) => m.domain.toLowerCase() !== domain.toLowerCase()
         );
-        await localStore.set(KEYS.CUSTOM_DOMAIN_MAPPINGS, filtered);
+        await syncStore.set(KEYS.CUSTOM_DOMAIN_MAPPINGS, filtered);
     },
 
     async clearMappings(): Promise<void> {
+        await syncStore.remove(KEYS.CUSTOM_DOMAIN_MAPPINGS);
         await localStore.remove(KEYS.CUSTOM_DOMAIN_MAPPINGS);
     },
 };
