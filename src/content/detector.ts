@@ -110,6 +110,17 @@ const EXCLUSION_PATTERNS = [
     "via-text",
     "via-email",
     "sms-marketing",
+    // Search inputs — never MFA
+    "search",
+    "query",
+    "keyword",
+    "q",
+    "filter",
+    "find",
+    "lookup",
+    "autocomplete",
+    "typeahead",
+    "suggest",
     // Developer/API credentials that look superficially like MFA inputs
     // (e.g. GitHub Personal Access Token displayed in a text field).
     "personal-access-token",
@@ -422,6 +433,26 @@ const isExcludedField = (input: HTMLInputElement): boolean => {
  */
 const calculateConfidence = (input: HTMLInputElement): number => {
     if (isExcludedField(input)) return 0;
+
+    // Exclude search inputs — type="search", role="search", or inside a
+    // search form/container. These are never MFA fields.
+    if (input.type === "search") return 0;
+    if (input.getAttribute("role") === "searchbox" || input.getAttribute("role") === "combobox") return 0;
+    if (input.closest('[role="search"]') || input.closest('form[role="search"]')) return 0;
+
+    // Exclude inputs with no maxlength or very large maxlength (> 20).
+    // OTP fields never accept more than ~8 characters. This filters out
+    // general text inputs (search bars, address fields, etc.) that might
+    // accidentally score points via nearby text patterns.
+    // Only skip if there's no strong explicit signal (autocomplete="one-time-code")
+    if (input.autocomplete !== "one-time-code" &&
+        (input.maxLength === -1 || input.maxLength > 20)) {
+        // Still allow if name/id/class strongly suggests OTP
+        const nameIdClass = `${input.name || ""} ${input.id || ""} ${input.className || ""}`;
+        if (!matchesPattern(nameIdClass, MFA_ATTRIBUTE_PATTERNS)) {
+            return 0;
+        }
+    }
 
     let confidence = 0;
 
