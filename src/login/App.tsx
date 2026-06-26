@@ -25,7 +25,7 @@ type Step =
     | "passkey"
     | "success";
 
-const PASSKEY_POLL_INTERVAL = 100; // 100ms for near-instant detection
+const PASSKEY_POLL_INTERVAL = 1000; // 1s to avoid rate limiting
 const PASSKEY_TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
 export const App: React.FC = () => {

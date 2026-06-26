@@ -89,5 +89,6 @@
     "hubspot": ["hubspot.com"],
     "salesforce": ["salesforce.com", "force.com"],
     "zoom": ["zoom.us", "zoom.com"],
-    "webex": ["webex.com", "cisco.com"]
+    "webex": ["webex.com"],
+    "cisco": ["cisco.com"]
 }

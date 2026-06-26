@@ -6,6 +6,7 @@ import { browser, sendMessage } from "@shared/browser";
 import { useTheme } from "@shared/useTheme";
 import { getBuiltInMappings } from "@shared/domain-matcher";
 import type { AuthState, Code, CustomDomainMapping, ExtensionSettings, ThemeMode } from "@shared/types";
+import { SearchableSelect } from "./SearchableSelect";
 
 /**
  * Get the extension version from the manifest.
@@ -389,18 +390,12 @@ export const App: React.FC = () => {
                                     />
                                 </div>
                                 <div className="form-row">
-                                    <select
+                                    <SearchableSelect
+                                        options={uniqueIssuers}
                                         value={newMappingIssuer}
-                                        onChange={(e) => setNewMappingIssuer(e.target.value)}
-                                        className="form-select"
-                                    >
-                                        <option value="">Select a code...</option>
-                                        {uniqueIssuers.map((issuer) => (
-                                            <option key={issuer} value={issuer}>
-                                                {issuer}
-                                            </option>
-                                        ))}
-                                    </select>
+                                        onChange={setNewMappingIssuer}
+                                        placeholder="Search for a code..."
+                                    />
                                 </div>
                                 <div className="form-actions">
                                     <button
