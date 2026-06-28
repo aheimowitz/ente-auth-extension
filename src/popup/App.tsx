@@ -65,6 +65,10 @@ export const App: React.FC = () => {
     };
     const [timeOffset, setTimeOffset] = useState(0);
     const [password, setPassword] = useState("");
+    const [pin, setPin] = useState("");
+    const [usePinUnlock, setUsePinUnlock] = useState(true);
+    const [hasPIN, setHasPIN] = useState(false);
+    const [unlocking, setUnlocking] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [syncing, setSyncing] = useState(false);
     const [loggingIn, setLoggingIn] = useState(false);
@@ -159,7 +163,7 @@ export const App: React.FC = () => {
                         return;
                     }
 
-                    const { isLoggedIn, isUnlocked } = response.data;
+                    const { isLoggedIn, isUnlocked, hasPIN: pinSet } = response.data;
 
                     if (!isLoggedIn) {
                         // Clear any cached codes we showed - user is logged out
@@ -170,6 +174,8 @@ export const App: React.FC = () => {
                         // Clear cached codes - vault is locked
                         setCodes([]);
                         setFilteredCodes([]);
+                        setHasPIN(!!pinSet);
+                        setUsePinUnlock(!!pinSet);
                         setView("unlock");
                     } else {
                         // User is authenticated - refresh codes from background
@@ -283,11 +289,12 @@ export const App: React.FC = () => {
         setFilteredCodes(result);
     }, [searchQuery, codes, sortOrder, selectedTag]);
 
-    // Handle unlock
+    // Handle unlock with password
     const handleUnlock = async () => {
         if (!password.trim()) return;
 
         setError(null);
+        setUnlocking(true);
         try {
             const response = await sendMessage<{
                 success: boolean;
@@ -306,6 +313,38 @@ export const App: React.FC = () => {
             }
         } catch (e) {
             setError(e instanceof Error ? e.message : "Failed to unlock");
+        } finally {
+            setUnlocking(false);
+        }
+    };
+
+    // Handle unlock with PIN
+    const handlePinUnlock = async () => {
+        if (!pin.trim()) return;
+
+        setError(null);
+        setUnlocking(true);
+        try {
+            const response = await sendMessage<{
+                success: boolean;
+                error?: string;
+            }>({
+                type: "UNLOCK_WITH_PIN",
+                pin,
+            });
+
+            if (response.success) {
+                setPin("");
+                await loadCodes();
+                setView("codes");
+            } else {
+                setPin("");
+                setError(response.error || "Incorrect PIN");
+            }
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Failed to unlock");
+        } finally {
+            setUnlocking(false);
         }
     };
 
@@ -773,6 +812,7 @@ export const App: React.FC = () => {
 
     // Render unlock view
     if (view === "unlock") {
+        const showPin = hasPIN && usePinUnlock;
         return (
             <div className="popup-container">
                 <div className="auth-container">
@@ -780,36 +820,88 @@ export const App: React.FC = () => {
                         <Logo />
                     </div>
                     <div className="auth-title">Unlock Vault</div>
-                    <div className="auth-description">
-                        Enter your password to unlock your auth codes.
-                    </div>
-                    <form
-                        className="auth-form"
-                        onSubmit={(e) => {
-                            e.preventDefault();
-                            handleUnlock();
-                        }}
-                    >
-                        <input
-                            type="password"
-                            className="auth-input"
-                            placeholder="Password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            autoFocus
-                        />
-                        <button
-                            type="submit"
-                            className="auth-button"
-                            disabled={!password.trim()}
-                        >
-                            Unlock
-                        </button>
-                        {error && <div className="auth-error">{error}</div>}
-                    </form>
-                    <span className="auth-link" onClick={handleLogout}>
-                        Use a different account
-                    </span>
+                    {showPin ? (
+                        <>
+                            <div className="auth-description">
+                                Enter your PIN to unlock.
+                            </div>
+                            <form
+                                className="auth-form"
+                                onSubmit={(e) => {
+                                    e.preventDefault();
+                                    handlePinUnlock();
+                                }}
+                            >
+                                <input
+                                    type="password"
+                                    inputMode="numeric"
+                                    className="auth-input pin-input"
+                                    placeholder="PIN"
+                                    value={pin}
+                                    onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                                    autoFocus
+                                    autoComplete="off"
+                                />
+                                <button
+                                    type="submit"
+                                    className="auth-button"
+                                    disabled={!pin.trim() || unlocking}
+                                >
+                                    {unlocking ? "Unlocking..." : "Unlock"}
+                                </button>
+                                {error && <div className="auth-error">{error}</div>}
+                            </form>
+                            <span
+                                className="auth-link"
+                                onClick={() => { setUsePinUnlock(false); setError(null); setPin(""); }}
+                            >
+                                Use password instead
+                            </span>
+                        </>
+                    ) : (
+                        <>
+                            <div className="auth-description">
+                                Enter your password to unlock your auth codes.
+                            </div>
+                            <form
+                                className="auth-form"
+                                onSubmit={(e) => {
+                                    e.preventDefault();
+                                    handleUnlock();
+                                }}
+                            >
+                                <input
+                                    type="password"
+                                    className="auth-input"
+                                    placeholder="Password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    autoFocus
+                                />
+                                <button
+                                    type="submit"
+                                    className="auth-button"
+                                    disabled={!password.trim() || unlocking}
+                                >
+                                    {unlocking ? "Unlocking..." : "Unlock"}
+                                </button>
+                                {error && <div className="auth-error">{error}</div>}
+                            </form>
+                            <div className="auth-links">
+                                {hasPIN && (
+                                    <span
+                                        className="auth-link"
+                                        onClick={() => { setUsePinUnlock(true); setError(null); setPassword(""); }}
+                                    >
+                                        Use PIN instead
+                                    </span>
+                                )}
+                                <span className="auth-link" onClick={handleLogout}>
+                                    Use a different account
+                                </span>
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
         );

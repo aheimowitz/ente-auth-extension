@@ -107,3 +107,21 @@ export const openOptionsPage = async (): Promise<void> => {
 export const openTab = async (url: string): Promise<Browser.Tabs.Tab> => {
     return browser.tabs.create({ url });
 };
+
+/**
+ * Register a listener for idle state changes.
+ * States: "active" | "idle" | "locked"
+ */
+export const onIdleStateChange = (
+    callback: (state: "active" | "idle" | "locked") => void
+): void => {
+    browser.idle.onStateChanged.addListener(callback as (state: Browser.Idle.IdleState) => void);
+};
+
+/**
+ * Set the idle detection interval in seconds.
+ * The browser fires "idle" after this many seconds without user input.
+ */
+export const setIdleDetectionInterval = (seconds: number): void => {
+    browser.idle.setDetectionInterval(seconds);
+};

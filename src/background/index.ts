@@ -3,14 +3,14 @@
  * Handles message passing, alarms, and extension lifecycle.
  */
 import type Browser from "webextension-polyfill";
-import { browser, createAlarm, onAlarm, onMessage } from "@shared/browser";
+import { browser, createAlarm, onAlarm, onMessage, onIdleStateChange, setIdleDetectionInterval } from "@shared/browser";
 import { matchCodesToDomain, setCustomMappings } from "@shared/domain-matcher";
 import { setApiBaseUrl } from "@shared/api";
 import type {
     ExtensionMessage,
     ExtensionResponse,
 } from "@shared/types";
-import { getAuthState, login, lock, logout, unlock } from "./auth";
+import { getAuthState, login, lock, logout, unlock, setPin, removePin, unlockWithPin } from "./auth";
 import { settingsStorage, authStorage, customMappingsStorage } from "./storage";
 import { getCodes, getTimeOffset, syncCodes, createCode, updateCode, deleteCode } from "./sync";
 import { scanQRFromPage } from "./qr-scanner";
@@ -30,6 +30,19 @@ onMessage((message, sender, sendResponse) => {
     return true; // Keep message channel open for async response
 });
 
+// Register idle listener synchronously so it survives MV3 service-worker wake-ups.
+onIdleStateChange((state) => {
+    settingsStorage.getSettings().then((settings) => {
+        const t = settings.vaultTimeout;
+        if (state === "locked" && t !== "never" && t !== "onRestart") {
+            // System lock triggers all timeout modes except "never" and "onRestart"
+            lock().catch(console.error);
+        } else if (state === "idle" && (t === "5" || t === "15" || t === "60" || t === "240")) {
+            lock().catch(console.error);
+        }
+    }).catch(console.error);
+});
+
 /**
  * Initialize the background script (async tasks like alarms).
  */
@@ -40,6 +53,12 @@ const init = async () => {
     const settings = await settingsStorage.getSettings();
     await createAlarm(SYNC_ALARM_NAME, settings.syncInterval);
     setApiBaseUrl(settings.serverUrl);
+
+    // Configure idle detection interval for minute-based timeouts
+    const minuteTimeouts = ["5", "15", "60", "240"] as const;
+    if (minuteTimeouts.includes(settings.vaultTimeout as typeof minuteTimeouts[number])) {
+        setIdleDetectionInterval(parseInt(settings.vaultTimeout) * 60);
+    }
 
     // Handle alarm events
     onAlarm(async (alarm) => {
@@ -209,13 +228,11 @@ const handleMessage = async (
         }
 
         case "SET_SETTINGS": {
-            // If lockOnBrowserClose is changing, migrate the master key
-            if (message.settings.lockOnBrowserClose !== undefined) {
+            // If vaultTimeout is changing, migrate the master key between storage locations
+            if (message.settings.vaultTimeout !== undefined) {
                 const currentKey = await authStorage.getMasterKey();
                 if (currentKey) {
-                    // Save settings first so setMasterKey uses the new location
                     await settingsStorage.setSettings(message.settings);
-                    // Re-save master key to migrate it to the new storage location
                     await authStorage.setMasterKey(currentKey);
                 } else {
                     await settingsStorage.setSettings(message.settings);
@@ -230,6 +247,13 @@ const handleMessage = async (
             // Update API URL if server URL changed
             if (message.settings.serverUrl !== undefined) {
                 setApiBaseUrl(message.settings.serverUrl);
+            }
+            // Reconfigure idle detection interval if vaultTimeout changed
+            if (message.settings.vaultTimeout !== undefined) {
+                const minuteTimeouts = ["5", "15", "60", "240"] as const;
+                if (minuteTimeouts.includes(message.settings.vaultTimeout as typeof minuteTimeouts[number])) {
+                    setIdleDetectionInterval(parseInt(message.settings.vaultTimeout) * 60);
+                }
             }
             return { success: true };
         }
@@ -326,6 +350,37 @@ const handleMessage = async (
                     success: false,
                     error: e instanceof Error ? e.message : "Failed to delete code",
                 };
+            }
+        }
+
+        case "UNLOCK_WITH_PIN": {
+            try {
+                const success = await unlockWithPin(message.pin);
+                if (success) {
+                    syncCodes().catch((e) => console.error("Sync after PIN unlock failed:", e));
+                    return { success: true };
+                }
+                return { success: false, error: "Incorrect PIN" };
+            } catch (e) {
+                return { success: false, error: e instanceof Error ? e.message : "Failed to unlock" };
+            }
+        }
+
+        case "SET_PIN": {
+            try {
+                await setPin(message.pin);
+                return { success: true };
+            } catch (e) {
+                return { success: false, error: e instanceof Error ? e.message : "Failed to set PIN" };
+            }
+        }
+
+        case "REMOVE_PIN": {
+            try {
+                await removePin();
+                return { success: true };
+            } catch (e) {
+                return { success: false, error: e instanceof Error ? e.message : "Failed to remove PIN" };
             }
         }
 

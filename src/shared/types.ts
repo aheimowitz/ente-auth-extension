@@ -56,6 +56,12 @@ export interface CodeDisplay {
 export type ThemeMode = "light" | "dark" | "system";
 
 /**
+ * When the vault should auto-lock. Minute values are string representations
+ * of the idle threshold in minutes.
+ */
+export type VaultTimeout = "never" | "onRestart" | "onSystemLock" | "5" | "15" | "60" | "240";
+
+/**
  * Auth codes and time offset from sync.
  */
 export interface AuthCodesAndTimeOffset {
@@ -76,8 +82,8 @@ export interface ExtensionSettings {
     syncInterval: number;
     /** Theme mode. Default: "system" */
     theme: ThemeMode;
-    /** Require password when browser restarts. Default: false */
-    lockOnBrowserClose: boolean;
+    /** When the vault auto-locks. Default: "never" */
+    vaultTimeout: VaultTimeout;
     /** Custom server URL for self-hosted instances. Empty string means use Ente Cloud. */
     serverUrl: string;
     /** Custom accounts URL for passkey verification on self-hosted instances. Empty string means use accounts.ente.io. */
@@ -94,7 +100,7 @@ export const defaultSettings: ExtensionSettings = {
     autoFillSingleMatch: true,
     syncInterval: 5,
     theme: "system",
-    lockOnBrowserClose: false,
+    vaultTimeout: "never",
     serverUrl: "",
     accountsUrl: "",
     sortOrder: "issuer",
@@ -143,6 +149,9 @@ export type ExtensionMessage =
     | { type: "LOGOUT" }
     | { type: "LOCK" }
     | { type: "UNLOCK"; password: string }
+    | { type: "UNLOCK_WITH_PIN"; pin: string }
+    | { type: "SET_PIN"; pin: string }
+    | { type: "REMOVE_PIN" }
     | { type: "GET_AUTH_STATE" }
     | { type: "GET_SETTINGS" }
     | { type: "SET_SETTINGS"; settings: Partial<ExtensionSettings> }
@@ -169,6 +178,7 @@ export interface AuthState {
     isLoggedIn: boolean;
     isUnlocked: boolean;
     email?: string;
+    hasPIN: boolean;
 }
 
 /**

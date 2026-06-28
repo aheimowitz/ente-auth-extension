@@ -3,7 +3,7 @@
  * Provides a unified interface for chrome.storage.local and chrome.storage.session.
  */
 import { browser } from "@shared/browser";
-import type { Code, CustomDomainMapping, ExtensionSettings, KeyAttributes } from "@shared/types";
+import type { Code, CustomDomainMapping, ExtensionSettings, KeyAttributes, VaultTimeout } from "@shared/types";
 
 // Storage keys
 const KEYS = {
@@ -17,6 +17,10 @@ const KEYS = {
     // Master key storage location depends on lockOnBrowserClose setting
     MASTER_KEY: "masterKey",
     MASTER_KEY_SESSION: "masterKeySession",
+    // PIN-encrypted master key (local, persists)
+    PIN_ENCRYPTED_DATA: "pinEncryptedData",
+    PIN_NONCE: "pinNonce",
+    PIN_SALT: "pinSalt",
     // Session storage (cleared on browser close)
     CODES_CACHE: "codesCache",
     TIME_OFFSET: "timeOffset",
@@ -142,17 +146,14 @@ export const authStorage = {
     },
 
     async setMasterKey(key: string): Promise<void> {
-        // Check setting to determine where to store
         const settings = await settingsStorage.getSettings();
-        if (settings.lockOnBrowserClose) {
-            // Store in session storage (cleared on browser close)
+        if (settings.vaultTimeout !== "never") {
+            // Any timeout setting: keep the live key in session storage so a
+            // browser restart always requires re-unlock (via PIN or password)
             await sessionStore.set(KEYS.MASTER_KEY_SESSION, key);
-            // Clear any persistent key
             await localStore.remove(KEYS.MASTER_KEY);
         } else {
-            // Store in local storage (persists across sessions)
             await localStore.set(KEYS.MASTER_KEY, key);
-            // Clear any session key
             await sessionStore.remove(KEYS.MASTER_KEY_SESSION);
         }
     },
@@ -202,7 +203,7 @@ export const codesStorage = {
  */
 export const settingsStorage = {
     async getSettings(): Promise<ExtensionSettings> {
-        const stored = await localStore.get<Partial<ExtensionSettings>>(
+        const stored = await localStore.get<Partial<ExtensionSettings> & { lockOnBrowserClose?: boolean }>(
             KEYS.SETTINGS
         );
         // Migrate from old autofillEnabled setting if present
@@ -210,12 +211,18 @@ export const settingsStorage = {
         const showAutofillIcon = stored?.showAutofillIcon ?? legacyAutofill ?? true;
         const autoFillSingleMatch = stored?.autoFillSingleMatch ?? legacyAutofill ?? true;
 
+        // Migrate from old lockOnBrowserClose boolean to vaultTimeout
+        let vaultTimeout: VaultTimeout = stored?.vaultTimeout ?? "never";
+        if (!stored?.vaultTimeout && stored?.lockOnBrowserClose) {
+            vaultTimeout = "onRestart";
+        }
+
         return {
             showAutofillIcon,
             autoFillSingleMatch,
             syncInterval: stored?.syncInterval ?? 5,
             theme: stored?.theme ?? "system",
-            lockOnBrowserClose: stored?.lockOnBrowserClose ?? false,
+            vaultTimeout,
             serverUrl: stored?.serverUrl ?? "",
             accountsUrl: stored?.accountsUrl ?? "",
             sortOrder: stored?.sortOrder ?? "issuer",
@@ -229,6 +236,42 @@ export const settingsStorage = {
 
     async clearSettings(): Promise<void> {
         await localStore.remove(KEYS.SETTINGS);
+    },
+};
+
+/**
+ * PIN-encrypted master key storage.
+ */
+export const pinStorage = {
+    async setPinData(encryptedData: string, nonce: string, salt: string): Promise<void> {
+        await Promise.all([
+            localStore.set(KEYS.PIN_ENCRYPTED_DATA, encryptedData),
+            localStore.set(KEYS.PIN_NONCE, nonce),
+            localStore.set(KEYS.PIN_SALT, salt),
+        ]);
+    },
+
+    async getPinData(): Promise<{ encryptedData: string; nonce: string; salt: string } | null> {
+        const [encryptedData, nonce, salt] = await Promise.all([
+            localStore.get<string>(KEYS.PIN_ENCRYPTED_DATA),
+            localStore.get<string>(KEYS.PIN_NONCE),
+            localStore.get<string>(KEYS.PIN_SALT),
+        ]);
+        if (!encryptedData || !nonce || !salt) return null;
+        return { encryptedData, nonce, salt };
+    },
+
+    async hasPIN(): Promise<boolean> {
+        const data = await localStore.get<string>(KEYS.PIN_ENCRYPTED_DATA);
+        return !!data;
+    },
+
+    async clearPinData(): Promise<void> {
+        await Promise.all([
+            localStore.remove(KEYS.PIN_ENCRYPTED_DATA),
+            localStore.remove(KEYS.PIN_NONCE),
+            localStore.remove(KEYS.PIN_SALT),
+        ]);
     },
 };
 

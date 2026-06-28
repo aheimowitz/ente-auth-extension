@@ -3,7 +3,7 @@
  * Multi-step login flow: email -> password (SRP) / email OTT -> 2FA/passkey -> success.
  */
 import React, { useEffect, useRef, useState } from "react";
-import { sendMessage } from "@shared/browser";
+import { browser, sendMessage } from "@shared/browser";
 import { useTheme } from "@shared/useTheme";
 import { getApiBaseUrl } from "@shared/api";
 import { getSRPAttributes, requestEmailOTT, verifyEmail, verifyTwoFactor, checkPasskeyVerificationStatus } from "@shared/api-auth";
@@ -190,16 +190,27 @@ export const App: React.FC = () => {
         }
 
         setStep("success");
+        // Auto-close the login tab after a short delay so the user briefly
+        // sees the success state, then the popup takes over.
+        setTimeout(() => window.close(), 1500);
     };
 
     /**
      * Close the accounts tab that was opened for passkey verification.
+     * Uses browser.tabs.remove (reliable) with window.close() as fallback.
      */
-    const closePasskeyTab = () => {
+    const closePasskeyTab = async () => {
         try {
-            passkeyTabRef.current?.close();
+            const acctUrl = getAccountsUrl();
+            const tabs = await browser.tabs.query({ url: acctUrl + "/*" });
+            await Promise.all(
+                tabs
+                    .filter((t) => t.id !== undefined)
+                    .map((t) => browser.tabs.remove(t.id!).catch(() => {}))
+            );
         } catch {
-            // Cross-origin or already closed - ignore
+            // Fall back to window reference if tabs API is unavailable
+            try { passkeyTabRef.current?.close(); } catch { /* ignore */ }
         }
         passkeyTabRef.current = null;
     };
@@ -269,7 +280,7 @@ export const App: React.FC = () => {
 
                 // Success - stop polling and close accounts tab
                 stopPasskeyPolling();
-                closePasskeyTab();
+                await closePasskeyTab();
 
                 const keyAttrs = result.keyAttributes;
                 const encToken = result.encryptedToken;

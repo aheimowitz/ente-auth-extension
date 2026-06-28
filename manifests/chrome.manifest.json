@@ -1,9 +1,9 @@
 {
     "manifest_version": 3,
     "name": "Ente Auth Extension",
-    "version": "0.4.2",
+    "version": "0.5.0",
     "description": "Secure 2FA autofill from your Ente Auth vault",
-    "permissions": ["storage", "activeTab", "alarms"],
+    "permissions": ["storage", "activeTab", "tabs", "alarms", "idle"],
     "host_permissions": ["https://api.ente.io/*", "<all_urls>"],
     "background": {
         "service_worker": "background/index.js"

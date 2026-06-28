@@ -1,22 +1,30 @@
 /**
  * Authentication management for the extension.
  */
-import { deriveKey, decryptBoxBytes, fromB64, toB64 } from "@shared/crypto";
+import { deriveKey, decryptBoxBytes, decryptBox, encryptBox, generateSalt, fromB64, toB64 } from "@shared/crypto";
 import type { AuthState, KeyAttributes } from "@shared/types";
-import { authStorage, clearAllStorage, codesStorage } from "./storage";
+import { authStorage, clearAllStorage, codesStorage, pinStorage } from "./storage";
+
+// Argon2id interactive parameters — fast enough for UX, slow enough for brute-force cost
+const PIN_OPS_LIMIT = 2; // crypto_pwhash_OPSLIMIT_INTERACTIVE
+const PIN_MEM_LIMIT = 67108864; // crypto_pwhash_MEMLIMIT_INTERACTIVE (64 MB)
 
 /**
  * Get the current authentication state.
  */
 export const getAuthState = async (): Promise<AuthState> => {
-    const token = await authStorage.getToken();
-    const masterKey = await authStorage.getMasterKey();
-    const email = await authStorage.getEmail();
+    const [token, masterKey, email, hasPINValue] = await Promise.all([
+        authStorage.getToken(),
+        authStorage.getMasterKey(),
+        authStorage.getEmail(),
+        pinStorage.hasPIN(),
+    ]);
 
     return {
         isLoggedIn: !!token,
         isUnlocked: !!masterKey,
         email,
+        hasPIN: hasPINValue,
     };
 };
 
@@ -116,4 +124,52 @@ export const getToken = async (): Promise<string | undefined> => {
  */
 export const getMasterKey = async (): Promise<string | undefined> => {
     return authStorage.getMasterKey();
+};
+
+/**
+ * Set a PIN for quick unlock. The vault must be unlocked first.
+ * Encrypts the master key with a PIN-derived key and stores the result locally.
+ */
+export const setPin = async (pin: string): Promise<void> => {
+    const masterKey = await authStorage.getMasterKey();
+    if (!masterKey) throw new Error("Vault must be unlocked to set a PIN");
+
+    const salt = await generateSalt();
+    const pinKey = await deriveKey(pin, salt, PIN_OPS_LIMIT, PIN_MEM_LIMIT);
+    const { encryptedData, nonce } = await encryptBox(masterKey, pinKey);
+    await pinStorage.setPinData(encryptedData, nonce, salt);
+};
+
+/**
+ * Remove the PIN. The vault remains unlocked; only the stored PIN data is cleared.
+ */
+export const removePin = async (): Promise<void> => {
+    await pinStorage.clearPinData();
+};
+
+/**
+ * Unlock the vault using the PIN.
+ */
+export const unlockWithPin = async (pin: string): Promise<boolean> => {
+    const pinData = await pinStorage.getPinData();
+    if (!pinData) return false;
+
+    try {
+        const pinKey = await deriveKey(pin, pinData.salt, PIN_OPS_LIMIT, PIN_MEM_LIMIT);
+        const masterKey = await decryptBox(
+            { encryptedData: pinData.encryptedData, nonce: pinData.nonce },
+            pinKey
+        );
+        await authStorage.setMasterKey(masterKey);
+        return true;
+    } catch {
+        return false;
+    }
+};
+
+/**
+ * Check whether a PIN is configured.
+ */
+export const hasPIN = async (): Promise<boolean> => {
+    return pinStorage.hasPIN();
 };

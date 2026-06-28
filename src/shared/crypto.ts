@@ -122,6 +122,14 @@ export const generateKey = async (): Promise<string> => {
 };
 
 /**
+ * Generate a random KDF salt.
+ */
+export const generateSalt = async (): Promise<string> => {
+    await sodium.ready;
+    return toB64(sodium.randombytes_buf(sodium.crypto_pwhash_SALTBYTES));
+};
+
+/**
  * Encrypt data using secretbox.
  */
 export const encryptBox = async (

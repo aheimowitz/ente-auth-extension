@@ -5,7 +5,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { browser, sendMessage } from "@shared/browser";
 import { useTheme } from "@shared/useTheme";
 import { getBuiltInMappings } from "@shared/domain-matcher";
-import type { AuthState, Code, CustomDomainMapping, ExtensionSettings, ThemeMode } from "@shared/types";
+import type { AuthState, Code, CustomDomainMapping, ExtensionSettings, ThemeMode, VaultTimeout } from "@shared/types";
 import { SearchableSelect } from "./SearchableSelect";
 
 /**
@@ -31,6 +31,14 @@ export const App: React.FC = () => {
     const [loggingOut, setLoggingOut] = useState(false);
     const [syncing, setSyncing] = useState(false);
     const [syncSuccess, setSyncSuccess] = useState(false);
+
+    // PIN management state
+    const [hasPIN, setHasPIN] = useState(false);
+    const [showPinSetup, setShowPinSetup] = useState(false);
+    const [pinValue, setPinValue] = useState("");
+    const [pinConfirm, setPinConfirm] = useState("");
+    const [pinError, setPinError] = useState<string | null>(null);
+    const [pinSaving, setPinSaving] = useState(false);
 
     // Domain mappings state
     const [customMappings, setCustomMappings] = useState<CustomDomainMapping[]>([]);
@@ -67,6 +75,7 @@ export const App: React.FC = () => {
                 }
                 if (authResponse.success && authResponse.data) {
                     setAuthState(authResponse.data);
+                    setHasPIN(!!authResponse.data.hasPIN);
                 }
                 if (mappingsResponse.success && mappingsResponse.data) {
                     setCustomMappings(mappingsResponse.data);
@@ -87,7 +96,8 @@ export const App: React.FC = () => {
         setLoggingOut(true);
         try {
             await sendMessage({ type: "LOGOUT" });
-            setAuthState({ isLoggedIn: false, isUnlocked: false });
+            setAuthState({ isLoggedIn: false, isUnlocked: false, hasPIN: false });
+            setHasPIN(false);
         } catch (e) {
             console.error("Failed to logout:", e);
         } finally {
@@ -323,22 +333,151 @@ export const App: React.FC = () => {
 
                     <div className="setting-item">
                         <div className="setting-info">
-                            <label>Lock on browser close</label>
+                            <label>Vault timeout</label>
                             <p>
-                                Require password when the browser restarts.
+                                Lock the vault automatically. You can always lock manually with the lock button in the popup.
                             </p>
                         </div>
-                        <label className="toggle">
-                            <input
-                                type="checkbox"
-                                checked={settings.lockOnBrowserClose}
-                                onChange={() =>
-                                    handleToggle("lockOnBrowserClose")
-                                }
-                            />
-                            <span className="toggle-slider"></span>
-                        </label>
+                        <select
+                            className="select-input"
+                            value={settings.vaultTimeout}
+                            onChange={(e) =>
+                                saveSettings({ vaultTimeout: e.target.value as VaultTimeout })
+                            }
+                        >
+                            <option value="never">Never</option>
+                            <option value="onRestart">On browser restart</option>
+                            <option value="onSystemLock">On system lock</option>
+                            <option value="5">After 5 minutes</option>
+                            <option value="15">After 15 minutes</option>
+                            <option value="60">After 1 hour</option>
+                            <option value="240">After 4 hours</option>
+                        </select>
                     </div>
+
+                    {authState?.isUnlocked && (
+                        <div className="setting-item vertical">
+                            <div className="setting-info">
+                                <label>PIN unlock</label>
+                                <p>
+                                    When your vault is locked — by the lock button or an auto-lock trigger above — you can enter this PIN instead of your full password.
+                                    Your Ente password always works as a fallback. The PIN is stored locally and never sent to Ente.
+                                </p>
+                                {settings.vaultTimeout === "never" && (
+                                    <p className="setting-hint">
+                                        With vault timeout set to Never, your vault only locks when you use the lock button manually.
+                                    </p>
+                                )}
+                            </div>
+
+                            {!showPinSetup ? (
+                                <div className="pin-status-row">
+                                    {hasPIN ? (
+                                        <>
+                                            <span className="pin-status-badge">PIN enabled</span>
+                                            <button
+                                                className="secondary-button"
+                                                onClick={() => {
+                                                    setPinValue("");
+                                                    setPinConfirm("");
+                                                    setPinError(null);
+                                                    setShowPinSetup(true);
+                                                }}
+                                            >
+                                                Change PIN
+                                            </button>
+                                            <button
+                                                className="danger-button"
+                                                onClick={async () => {
+                                                    await sendMessage({ type: "REMOVE_PIN" });
+                                                    setHasPIN(false);
+                                                }}
+                                            >
+                                                Remove PIN
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <button
+                                            className="secondary-button"
+                                            onClick={() => {
+                                                setPinValue("");
+                                                setPinConfirm("");
+                                                setPinError(null);
+                                                setShowPinSetup(true);
+                                            }}
+                                        >
+                                            Set PIN
+                                        </button>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="pin-setup-form">
+                                    <input
+                                        type="password"
+                                        inputMode="numeric"
+                                        className="form-input"
+                                        placeholder="Enter PIN (4–8 digits)"
+                                        value={pinValue}
+                                        onChange={(e) => setPinValue(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                                        autoFocus
+                                        autoComplete="new-password"
+                                    />
+                                    <input
+                                        type="password"
+                                        inputMode="numeric"
+                                        className="form-input"
+                                        placeholder="Confirm PIN"
+                                        value={pinConfirm}
+                                        onChange={(e) => setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                                        autoComplete="new-password"
+                                    />
+                                    {pinError && <p className="pin-error">{pinError}</p>}
+                                    <div className="form-actions">
+                                        <button
+                                            className="cancel-button"
+                                            onClick={() => setShowPinSetup(false)}
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            className="save-button"
+                                            disabled={pinSaving}
+                                            onClick={async () => {
+                                                setPinError(null);
+                                                if (pinValue.length < 4) {
+                                                    setPinError("PIN must be at least 4 digits");
+                                                    return;
+                                                }
+                                                if (pinValue !== pinConfirm) {
+                                                    setPinError("PINs do not match");
+                                                    return;
+                                                }
+                                                setPinSaving(true);
+                                                try {
+                                                    const res = await sendMessage<{ success: boolean; error?: string }>({
+                                                        type: "SET_PIN",
+                                                        pin: pinValue,
+                                                    });
+                                                    if (res.success) {
+                                                        setHasPIN(true);
+                                                        setShowPinSetup(false);
+                                                        setPinValue("");
+                                                        setPinConfirm("");
+                                                    } else {
+                                                        setPinError(res.error || "Failed to set PIN");
+                                                    }
+                                                } finally {
+                                                    setPinSaving(false);
+                                                }
+                                            }}
+                                        >
+                                            {pinSaving ? "Saving..." : "Save PIN"}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </section>
 
                 <section className="settings-section">
