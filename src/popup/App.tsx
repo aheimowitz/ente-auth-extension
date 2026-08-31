@@ -2,13 +2,15 @@
  * Extension popup main application component.
  */
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { browser, sendMessage, openOptionsPage } from "@shared/browser";
-import { searchCodes } from "@shared/domain-matcher";
+import { browser, sendMessage, openOptionsPage, getCurrentTabHostname } from "@shared/browser";
+import { setCustomMappings } from "@shared/domain-matcher";
 import { generateOTPs } from "@shared/otp";
+import { formatHostname } from "@shared/tab-url";
 import { useTheme } from "@shared/useTheme";
-import type { AuthState, Code, CodeFormData, ParsedQRCode } from "@shared/types";
+import type { AuthState, Code, CodeFormData, CustomDomainMapping, ParsedQRCode } from "@shared/types";
 import { CodeCard } from "./CodeCard";
 import { CodeForm } from "./CodeForm";
+import { filterPopupCodes } from "./filter-codes";
 
 /**
  * Read codes directly from storage without going through the service worker.
@@ -88,6 +90,8 @@ export const App: React.FC = () => {
     const [exitingPinId, setExitingPinId] = useState<string | null>(null);
     const [canScrollLeft, setCanScrollLeft] = useState(false);
     const [canScrollRight, setCanScrollRight] = useState(false);
+    const [currentDomain, setCurrentDomain] = useState<string | null>(null);
+    const [showAllCodes, setShowAllCodes] = useState(false);
     const tagFilterRef = useRef<HTMLDivElement>(null);
 
     // Check if tag filter bar can scroll
@@ -118,13 +122,25 @@ export const App: React.FC = () => {
     // First tries to load cached codes for instant display, then verifies auth state
     useEffect(() => {
         const initializePopup = async (): Promise<void> => {
-            // Load saved sort order from settings
-            const settingsRes = await sendMessage<{
-                success: boolean;
-                data?: { sortOrder?: "issuer" | "account" | "recent" };
-            }>({ type: "GET_SETTINGS" });
+            // Resolve current site and custom mappings before showing codes,
+            // so the list never flashes the full vault first.
+            const [settingsRes, hostname, mappingsRes] = await Promise.all([
+                sendMessage<{
+                    success: boolean;
+                    data?: { sortOrder?: "issuer" | "account" | "recent" };
+                }>({ type: "GET_SETTINGS" }).catch(() => ({ success: false as const })),
+                getCurrentTabHostname(),
+                sendMessage<{ success: boolean; data?: CustomDomainMapping[] }>({
+                    type: "GET_CUSTOM_MAPPINGS",
+                }).catch(() => ({ success: false as const })),
+            ]);
+
             if (settingsRes.success && settingsRes.data?.sortOrder) {
                 setSortOrder(settingsRes.data.sortOrder);
+            }
+            setCurrentDomain(hostname);
+            if (mappingsRes.success && mappingsRes.data) {
+                setCustomMappings(mappingsRes.data);
             }
 
             // Step 1: Try to load cached codes immediately (no service worker needed)
@@ -132,7 +148,18 @@ export const App: React.FC = () => {
             if (cached && cached.codes.length > 0) {
                 // Show cached codes instantly while we verify auth in background
                 setCodes(cached.codes);
-                setFilteredCodes(cached.codes);
+                setFilteredCodes(
+                    filterPopupCodes({
+                        codes: cached.codes,
+                        currentDomain: hostname,
+                        showAllCodes: false,
+                        searchQuery: "",
+                        selectedTag: "",
+                        sortOrder: settingsRes.success && settingsRes.data?.sortOrder
+                            ? settingsRes.data.sortOrder
+                            : "issuer",
+                    })
+                );
                 setTimeOffset(cached.timeOffset);
 
                 // Extract tags from cached codes
@@ -213,7 +240,6 @@ export const App: React.FC = () => {
 
             if (response.success && response.data) {
                 setCodes(response.data.codes);
-                setFilteredCodes(response.data.codes);
                 setTimeOffset(response.data.timeOffset);
 
                 // Extract all unique tags
@@ -250,44 +276,19 @@ export const App: React.FC = () => {
         return () => clearInterval(interval);
     }, [view, codes, timeOffset]);
 
-    // Filter and sort codes when search query, tag, or sort order changes
+    // Filter and sort codes when search, tag, sort, or current-site filter changes.
     useEffect(() => {
-        let result = searchQuery.trim()
-            ? searchCodes(codes, searchQuery)
-            : [...codes];
-
-        // Filter by selected tag
-        if (selectedTag) {
-            result = result.filter((code) =>
-                code.codeDisplay?.tags?.includes(selectedTag)
-            );
-        }
-
-        // Apply sorting (pinned codes always first)
-        result.sort((a, b) => {
-            // Pinned codes come first
-            const aPinned = a.codeDisplay?.pinned ? 1 : 0;
-            const bPinned = b.codeDisplay?.pinned ? 1 : 0;
-            if (aPinned !== bPinned) {
-                return bPinned - aPinned; // Pinned first
-            }
-
-            // Then apply regular sort order
-            switch (sortOrder) {
-                case "issuer":
-                    return a.issuer.localeCompare(b.issuer);
-                case "account":
-                    return (a.account || "").localeCompare(b.account || "");
-                case "recent":
-                    // Most recently used first (using updatedAt or id as fallback)
-                    return (b.id || "").localeCompare(a.id || "");
-                default:
-                    return 0;
-            }
-        });
-
-        setFilteredCodes(result);
-    }, [searchQuery, codes, sortOrder, selectedTag]);
+        setFilteredCodes(
+            filterPopupCodes({
+                codes,
+                currentDomain,
+                showAllCodes,
+                searchQuery,
+                selectedTag,
+                sortOrder,
+            })
+        );
+    }, [searchQuery, codes, sortOrder, selectedTag, currentDomain, showAllCodes]);
 
     // Handle unlock with password
     const handleUnlock = async () => {
@@ -973,6 +974,24 @@ export const App: React.FC = () => {
                 </div>
             </div>
 
+            {currentDomain && (
+                <div className="site-filter-bar">
+                    <div className="site-filter-info">
+                        <GlobeIcon />
+                        <span className="site-filter-label" title={currentDomain}>
+                            {showAllCodes ? "All codes" : formatHostname(currentDomain)}
+                        </span>
+                    </div>
+                    <button
+                        type="button"
+                        className="site-filter-toggle"
+                        onClick={() => setShowAllCodes(!showAllCodes)}
+                    >
+                        {showAllCodes ? "This site" : "Show all"}
+                    </button>
+                </div>
+            )}
+
             {showSearch && (
                 <div className="search-container">
                     <input
@@ -1076,8 +1095,19 @@ export const App: React.FC = () => {
                         <div className="empty-state-text">
                             {codes.length === 0
                                 ? "No codes yet. Click + to add one."
-                                : "No codes match your search."}
+                                : currentDomain && !showAllCodes && !searchQuery.trim()
+                                    ? `No codes for ${formatHostname(currentDomain)}.`
+                                    : "No codes match your search."}
                         </div>
+                        {codes.length > 0 && currentDomain && !showAllCodes && !searchQuery.trim() && (
+                            <button
+                                type="button"
+                                className="empty-state-action"
+                                onClick={() => setShowAllCodes(true)}
+                            >
+                                Show all codes
+                            </button>
+                        )}
                     </div>
                 ) : (
                     filteredCodes.map((code) => {
@@ -1272,6 +1302,15 @@ const LockIcon: React.FC = () => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
         <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+);
+
+// Globe icon (current site)
+const GlobeIcon: React.FC = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="2" y1="12" x2="22" y2="12" />
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
     </svg>
 );
 

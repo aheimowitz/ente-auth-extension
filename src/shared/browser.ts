@@ -3,6 +3,7 @@
  * Normalizes Chrome/Firefox APIs into a unified Promise-based interface.
  */
 import Browser from "webextension-polyfill";
+import { hostnameFromUrl } from "./tab-url";
 
 export const browser = Browser;
 
@@ -31,6 +32,18 @@ export const isFirefox = (): boolean => {
 export const getCurrentTab = async (): Promise<Browser.Tabs.Tab | undefined> => {
     const tabs = await browser.tabs.query({ active: true, currentWindow: true });
     return tabs[0];
+};
+
+/**
+ * Hostname of the active tab, or null for non-http(s) pages (new tab, chrome://, etc.).
+ */
+export const getCurrentTabHostname = async (): Promise<string | null> => {
+    try {
+        const tab = await getCurrentTab();
+        return hostnameFromUrl(tab?.url);
+    } catch {
+        return null;
+    }
 };
 
 /**
