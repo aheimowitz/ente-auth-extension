@@ -1,4 +1,4 @@
-# Duckey
+# Duckey: 2FA Autofill for Ente Auth
 
 Duckey is a browser extension that autofills 2FA codes from your [Ente Auth](https://ente.io/auth) vault. (Ente is German for duck.)
 
