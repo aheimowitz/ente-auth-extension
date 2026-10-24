@@ -6,6 +6,16 @@ Each store accepts a version number only once, and the **first** upload to each 
 
 All the images are in [`store-listing/`](store-listing/). Text you can paste is at the end of this file, under [Listing copy](#listing-copy).
 
+## Status
+
+| Store | Status (2026-10-24) | Listing |
+| --- | --- | --- |
+| Chrome Web Store | 1.0.0 submitted; in-depth review (all-sites access) | Link once approved |
+| Microsoft Edge Add-ons | 1.0.0 submitted | Link once approved |
+| Firefox Add-ons | 1.0.0 submitted as a listed version, with source | `https://addons.mozilla.org/firefox/addon/duckey/` once approved |
+
+Steps 0–4 below are done. What's left: get the CI keys (steps 2 and 3), then step 5 once all three are approved, then step 7.
+
 ---
 
 ## 0. Before you start
@@ -36,18 +46,20 @@ The privacy policy URL that every store asks for is
 
 ## 2. Chrome Web Store
 
+Chrome blocks every extension, Claude in Chrome included, from reading or controlling Chrome Web Store pages, so the dashboard has to be filled in by hand.
+
 **Account (one time)**
 1. Make sure 2-step verification is on for the Google account you'll publish with.
 2. Go to the [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole), accept the agreement and pay the one-time $5 fee.
-3. In **Account**, set your publisher name (e.g. "Duckey"), verify the contact email, and fill in the trader / non-trader declaration.
+3. In **Account**, set your publisher name (e.g. "Duckey"), and fill in the trader / non-trader declaration. Enter a contact email and **verify** it (click Verify, then the link in the email). Chrome won't publish anything until it's verified.
 
 **First submission**
 1. Click **New item** and upload `duckey-chrome-1.0.0.zip`.
 2. **Store listing** tab:
    - Description: see [Detailed description](#detailed-description)
-   - Category: **Productivity → Tools**
+   - Category: **Make Chrome Yours → Privacy & Security** (or Productivity → Tools)
    - Language: English
-   - Store icon: `assets/icons/icon128.png`
+   - Store icon: `assets/icons/icon128.png` (Chrome requires exactly 128×128; the 300×300 logo is rejected)
    - Screenshots: `store-listing/1-autofill.png` … `5-settings.png`
    - Small promo tile: `store-listing/promo-small-440x280.png`
    - Marquee (optional): `store-listing/promo-marquee-1400x560.png`
@@ -63,7 +75,7 @@ The privacy policy URL that every store asks for is
 5. **Distribution**: Public, all regions. Then **Submit for review**.
 6. Copy the **item ID** (the 32-letter ID in the item's URL). That's `CWS_EXTENSION_ID`.
 
-Because Duckey needs access to all sites, expect Chrome's in-depth review: anywhere from a few days to a few weeks.
+Because Duckey needs access to all sites, Chrome shows a "Publishing will be delayed: Broad Host Permissions" warning and does an in-depth review: anywhere from a few days to a few weeks. That's expected. The content script has to run on every site to detect 2FA fields, so `activeTab` or a site list can't replace it.
 
 **API keys for CI (can be done while in review)**
 1. Run the helper. It walks you through creating a Google Cloud project, enabling the Chrome Web Store API, and making an OAuth client. At the end it prints the client ID, client secret and refresh token:
@@ -75,7 +87,8 @@ Because Duckey needs access to all sites, expect Chrome's in-depth review: anywh
 ## 3. Microsoft Edge Add-ons
 
 **Account (one time, free)**
-1. Sign up for the Microsoft Edge program in [Partner Center](https://partner.microsoft.com/dashboard/microsoftedge/overview) with a Microsoft account.
+1. Sign up for the Microsoft Edge program in [Partner Center](https://partner.microsoft.com/dashboard/microsoftedge/public/login?ref=dd) with a Microsoft account (account type: Individual).
+2. A new account can take a few hours before the Edge dashboard opens. Until then, the Edge workspace tile just sends you back to Partner Center Home. If it still does that the next day, contact Partner Center support.
 
 **First submission**
 1. **Create new extension** and upload the **same** `duckey-chrome-1.0.0.zip`.
@@ -84,15 +97,16 @@ Because Duckey needs access to all sites, expect Chrome's in-depth review: anywh
    - Category: **Productivity**
    - Privacy policy: **Yes**, with the PRIVACY.md link
    - Website and support contact: the repo and its Issues page
-4. **Store listings** (English):
-   - Description: see [Detailed description](#detailed-description)
-   - Extension Store logo: `store-listing/store-logo-300x300.png`
+4. **Privacy**: the same answers as Chrome's Privacy tab: [Single purpose](#single-purpose), the [Permission justifications](#permission-justifications), no remote code, Personally identifiable information and Authentication information, the PRIVACY.md URL, and the three certifications.
+5. **Store listings** (English):
+   - Description: see [Detailed description](#detailed-description). There's no separate short description field.
+   - Extension logo: `store-listing/store-logo-300x300.png`
    - Small promo tile: `promo-small-440x280.png`
    - Large promo tile (optional): `promo-marquee-1400x560.png`
-   - Screenshots: the five 1280×800 PNGs
-   - Short description: see [Short description](#short-description)
-5. **Submit**. In "Notes for certification", paste the [Reviewer notes](#reviewer-notes) plus the reviewer account. Microsoft says review takes up to 7 business days.
-6. On the extension's **Overview** page, copy the **Product ID**. That's `EDGE_PRODUCT_ID`.
+   - Screenshots: the five 1280×800 PNGs. Upload them one at a time, in order; uploading several at once scrambles the order, and they can't be dragged afterwards.
+   - Search terms: `2FA`, `TOTP`, `authenticator`, `Ente Auth`, `two-factor`, `one-time code`, `autofill`
+6. **Publish**. In "Notes for certification", paste the [Reviewer notes](#reviewer-notes) plus the reviewer account. Microsoft says review takes up to 7 business days.
+7. On the extension's **Overview** page, copy the **Product ID**. That's `EDGE_PRODUCT_ID`.
 
 **API keys for CI**
 1. Partner Center → Microsoft Edge → **Publish API** → **Create API credentials**.
@@ -103,9 +117,10 @@ Because Duckey needs access to all sites, expect Chrome's in-depth review: anywh
 The add-on already exists on AMO as **unlisted**, under the ID `ente-auth-extension@adamheimowitz.com`. Keep that ID so existing users stay on the same add-on. The CI secrets `AMO_JWT_ISSUER` / `AMO_JWT_SECRET` are already set.
 
 1. In the [Developer Hub](https://addons.mozilla.org/developers/addons), open the add-on and click **Upload New Version**.
-2. Choose **On this site** (listed), then upload `duckey-firefox-1.0.0.zip`.
-3. When it asks about source code, answer **Yes** and upload `duckey-source-1.0.0.zip`. In the reviewer notes, add the build steps: "Node 20, `npm ci`, `npm run build:firefox`; output in `dist-firefox/`."
+2. The upload page defaults to **On your own** (unlisted). Click **Change**, choose **On this site** (listed), then upload `duckey-firefox-1.0.0.zip`. Leave compatibility on Firefox only (not tested on Firefox for Android).
+3. When it asks whether you need to submit source code, answer **Yes** and upload `duckey-source-1.0.0.zip`. In the reviewer notes, add the build steps: "Node 20, `npm ci`, `npm run build:firefox`; output in `dist-firefox/`."
 4. Fill in the listing:
+   - Name: `Duckey: 2FA Autofill for Ente Auth`. Renaming rewrites the add-on URL (slug); set it to `duckey`.
    - Summary: see [Short description](#short-description)
    - Description: see [Detailed description](#detailed-description)
    - Category: **Privacy & Security**
@@ -113,7 +128,9 @@ The add-on already exists on AMO as **unlisted**, under the ID `ente-auth-extens
    - Privacy policy: paste the text of PRIVACY.md
    - Support site / email: the repo's Issues page
 5. Add the [Reviewer notes](#reviewer-notes) plus the reviewer account, and submit.
-6. Then go to **Edit Product Page** and add the icon and the five screenshots.
+6. Then go to **Edit Product Page → Images**:
+   - Upload a custom icon: `branding/duckey-512.png`. Mozilla's listing doesn't use the package icon and otherwise shows a generic puzzle piece.
+   - Add the five screenshots one at a time, in order, with captions.
 
 ## 5. Turn on CI publishing (after all three are live)
 
