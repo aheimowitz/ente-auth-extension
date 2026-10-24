@@ -1,6 +1,6 @@
 /**
- * Theme CSS variables for Ente Auth Extension.
- * Matches the Ente Auth mobile app color scheme.
+ * Theme CSS variables for Duckey.
+ * Layout follows the Ente Auth mobile app; accent is Duckey's mallard teal.
  */
 
 /* Dark theme (default) */
@@ -18,8 +18,8 @@
     --stroke: rgba(255, 255, 255, 0.12);
 
     /* Fixed colors (both themes) */
-    --accent-purple: #8F33D6;
-    --accent-purple-hover: #9610D6;
+    --accent: #0F7A68;
+    --accent-hover: #13917B;
     --success-green: #1DB954;
     --warning-yellow: #FFC247;
     --error-red: #F53434;
@@ -29,7 +29,7 @@
     --fab-foreground: #282828;
 
     /* Pin indicator background */
-    --pin-bg: #390c4f;
+    --pin-bg: #0A3D37;
 }
 
 /* Light theme */
@@ -46,8 +46,8 @@
     --stroke: rgba(0, 0, 0, 0.12);
 
     /* Fixed colors remain the same */
-    --accent-purple: #8F33D6;
-    --accent-purple-hover: #7A2BB8;
+    --accent: #0F7A68;
+    --accent-hover: #0B6455;
     --success-green: #1DB954;
     --warning-yellow: #FFC247;
     --error-red: #F53434;
@@ -57,5 +57,29 @@
     --fab-foreground: #FFFFFF;
 
     /* Pin indicator background */
+    --pin-bg: #E3F4F0;
+}
+
+/* Ente Auth purple accent (opt-in from settings; always used on the login page).
+   Keep in sync with ACCENT_COLORS in useTheme.ts. */
+.accent-ente {
+    --accent: #8F33D6;
+    --accent-hover: #9610D6;
+    --pin-bg: #390c4f;
+}
+
+.theme-light.accent-ente {
+    --accent-hover: #7A2BB8;
     --pin-bg: #f9ecff;
+}
+
+/* Custom accent: --accent is set inline on <html> from settings; derive the rest. */
+.accent-custom {
+    --accent-hover: color-mix(in srgb, var(--accent) 85%, white);
+    --pin-bg: color-mix(in srgb, var(--accent) 30%, black);
+}
+
+.theme-light.accent-custom {
+    --accent-hover: color-mix(in srgb, var(--accent) 85%, black);
+    --pin-bg: color-mix(in srgb, var(--accent) 12%, white);
 }

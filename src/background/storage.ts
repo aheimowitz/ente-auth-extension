@@ -222,6 +222,8 @@ export const settingsStorage = {
             autoFillSingleMatch,
             syncInterval: stored?.syncInterval ?? 5,
             theme: stored?.theme ?? "system",
+            accentTheme: stored?.accentTheme ?? "duckey",
+            accentCustomColor: stored?.accentCustomColor ?? "#2F6FDE",
             vaultTimeout,
             serverUrl: stored?.serverUrl ?? "",
             accountsUrl: stored?.accountsUrl ?? "",

@@ -737,7 +737,7 @@ export const App: React.FC = () => {
                     <div className="auth-logo">
                         <Logo />
                     </div>
-                    <div className="auth-title">Ente Auth Extension</div>
+                    <div className="auth-title">Duckey</div>
                     <div className="auth-description">
                         Secure 2FA autofill from your Ente Auth vault.
                     </div>
@@ -748,7 +748,7 @@ export const App: React.FC = () => {
                             onClick={handleWebLogin}
                             disabled={loggingIn}
                         >
-                            {loggingIn ? "Waiting for login..." : "Log in"}
+                            {loggingIn ? "Waiting for login..." : "Log in with Ente Auth"}
                         </button>
                         {loggingIn && (
                             <div className="auth-hint">
@@ -920,7 +920,7 @@ export const App: React.FC = () => {
                         <SettingsIcon />
                     </button>
                 </div>
-                <span className="header-title">Auth</span>
+                <span className="header-title">Duckey</span>
                 <div className="header-right">
                     <button
                         className="icon-button"
@@ -1245,17 +1245,14 @@ export const App: React.FC = () => {
     );
 };
 
-// Logo component - Ente Auth purple
+// Logo component - Duckey duck-key mark
 const Logo: React.FC = () => (
     <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
-        <path
-            d="M12 2L3 7V12C3 16.97 6.84 21.66 12 23C17.16 21.66 21 16.97 21 12V7L12 2Z"
-            fill="#8F33D6"
-        />
-        <path
-            d="M10 17L6 13L7.41 11.59L10 14.17L16.59 7.58L18 9L10 17Z"
-            fill="white"
-        />
+        <rect width="24" height="24" rx="5.25" style={{ fill: "var(--accent)" }} />
+        <path d="M6.75 10.5C4.13 9.94 1.69 10.5 1.69 12C1.69 13.5 4.13 14.06 6.75 13.5Z" fill="#F7A325" />
+        <path d="M11.25 10.31H21A.75.75 0 0 1 21.75 11.06V12.56A.75.75 0 0 1 21 13.31H20.25V15.75A.56.56 0 0 1 19.69 16.31H18.56A.56.56 0 0 1 18 15.75V13.31H16.88V14.81A.56.56 0 0 1 16.31 15.38H15.19A.56.56 0 0 1 14.63 14.81V13.31H11.25Z" fill="#FFF6E0" />
+        <circle cx="9" cy="11.81" r="5.06" fill="#FFF6E0" />
+        <circle cx="9.38" cy="10.31" r="0.94" fill="#0A5048" />
     </svg>
 );
 

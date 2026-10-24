@@ -2,14 +2,16 @@
  * Sync module for fetching and caching auth codes.
  */
 import {
+    APIError,
     getAuthCodes,
     getAuthenticatorEntityKey,
+    createAuthenticatorEntityKey,
     createAuthenticatorEntity,
     updateAuthenticatorEntity,
     deleteAuthenticatorEntity,
 } from "@shared/api";
 import { codeToURIString } from "@shared/code";
-import { decryptBox, encryptMetadataJSON } from "@shared/crypto";
+import { decryptBox, encryptBox, encryptMetadataJSON, generateKey } from "@shared/crypto";
 import type { Code, CodeFormData } from "@shared/types";
 import { getToken, getMasterKey, isUnlocked } from "./auth";
 import { codesStorage, settingsStorage } from "./storage";
@@ -100,8 +102,14 @@ export const getTimeOffset = async (): Promise<number> => {
 /**
  * Get the decrypted authenticator key.
  * Returns undefined if not logged in or key not available.
+ *
+ * A new Ente account has no authenticator key until a client creates one.
+ * With `createIfMissing`, generate it the way Ente's apps do: a random
+ * secretbox key, encrypted with the master key (issue #25).
  */
-export const getAuthenticatorKey = async (): Promise<string | undefined> => {
+export const getAuthenticatorKey = async (
+    { createIfMissing = false }: { createIfMissing?: boolean } = {}
+): Promise<string | undefined> => {
     const token = await getToken();
     const masterKey = await getMasterKey();
 
@@ -109,7 +117,19 @@ export const getAuthenticatorKey = async (): Promise<string | undefined> => {
         return undefined;
     }
 
-    const entityKey = await getAuthenticatorEntityKey(token);
+    let entityKey = await getAuthenticatorEntityKey(token);
+    if (!entityKey && createIfMissing) {
+        const authenticatorKey = await generateKey();
+        const { encryptedData, nonce } = await encryptBox(authenticatorKey, masterKey);
+        try {
+            await createAuthenticatorEntityKey(token, { encryptedKey: encryptedData, header: nonce });
+            return authenticatorKey;
+        } catch (e) {
+            // Another device created the key first; use theirs
+            if (!(e instanceof APIError && e.status === 409)) throw e;
+            entityKey = await getAuthenticatorEntityKey(token);
+        }
+    }
     if (!entityKey) {
         return undefined;
     }
@@ -130,7 +150,7 @@ export const createCode = async (
     formData: CodeFormData
 ): Promise<{ id: string }> => {
     const token = await getToken();
-    const authenticatorKey = await getAuthenticatorKey();
+    const authenticatorKey = await getAuthenticatorKey({ createIfMissing: true });
 
     if (!token || !authenticatorKey) {
         throw new Error("Not authenticated");

@@ -7,7 +7,8 @@ import React, { useEffect, useState, useRef, useCallback, useMemo } from "react"
 import { createRoot, type Root } from "react-dom/client";
 import { generateOTPs, getProgress } from "@shared/otp";
 import { prettyFormatCode } from "@shared/code";
-import { getResolvedTheme } from "@shared/useTheme";
+import { ACCENT_COLORS, getResolvedAccentColor, getResolvedTheme } from "@shared/useTheme";
+import { renderDuckeyIconDataUrl } from "@shared/icon";
 import { browser, sendMessage } from "@shared/browser";
 import type { AuthState, Code, DomainMatch } from "@shared/types";
 
@@ -22,7 +23,6 @@ const themeColors = {
         textMuted: "rgba(255, 255, 255, 0.70)",
         textFaint: "rgba(255, 255, 255, 0.50)",
         stroke: "rgba(255, 255, 255, 0.12)",
-        accentPurple: "#8F33D6",
         success: "#4CAF50",
     },
     light: {
@@ -32,7 +32,6 @@ const themeColors = {
         textMuted: "rgba(0, 0, 0, 0.60)",
         textFaint: "rgba(0, 0, 0, 0.50)",
         stroke: "rgba(0, 0, 0, 0.12)",
-        accentPurple: "#8F33D6",
         success: "#4CAF50",
     },
 };
@@ -45,6 +44,7 @@ interface DropdownProps {
     onFill: (code: string) => void;
     onClose: () => void;
     theme: ResolvedTheme;
+    accentColor: string;
     domain: string;
 }
 
@@ -54,6 +54,7 @@ const Dropdown: React.FC<DropdownProps> = ({
     onFill,
     onClose,
     theme,
+    accentColor,
     domain,
 }) => {
     const [otps, setOtps] = useState<Map<string, string>>(new Map());
@@ -185,7 +186,7 @@ const Dropdown: React.FC<DropdownProps> = ({
         }
     }, [selectedCode, otps, timeOffset, domain, onFill]);
 
-    const colors = themeColors[theme];
+    const colors = { ...themeColors[theme], accent: accentColor };
 
     const styles: Record<string, React.CSSProperties> = {
         dropdown: {
@@ -301,7 +302,7 @@ const Dropdown: React.FC<DropdownProps> = ({
         },
         progressBar: {
             height: "100%",
-            backgroundColor: colors.accentPurple,
+            backgroundColor: colors.accent,
             transition: "width 1s linear",
         },
         empty: {
@@ -319,7 +320,7 @@ const Dropdown: React.FC<DropdownProps> = ({
             fontSize: "14px",
             fontWeight: 600,
             color: "#FFFFFF",
-            backgroundColor: colors.accentPurple,
+            backgroundColor: colors.accent,
             border: "none",
             borderRadius: "6px",
             cursor: "pointer",
@@ -336,7 +337,7 @@ const Dropdown: React.FC<DropdownProps> = ({
         },
         confirmDomain: {
             fontWeight: 600,
-            color: colors.accentPurple,
+            color: colors.accent,
         },
         confirmIssuer: {
             fontWeight: 600,
@@ -355,7 +356,7 @@ const Dropdown: React.FC<DropdownProps> = ({
             cursor: "pointer",
         },
         saveButton: {
-            backgroundColor: colors.accentPurple,
+            backgroundColor: colors.accent,
             color: "#FFFFFF",
         },
         skipButton: {
@@ -381,16 +382,13 @@ const Dropdown: React.FC<DropdownProps> = ({
                 <div ref={dropdownRef} style={styles.dropdown}>
                     <div style={styles.header}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                            <path
-                                d="M12 2L3 7V12C3 16.97 6.84 21.66 12 23C17.16 21.66 21 16.97 21 12V7L12 2Z"
-                                fill="#8F33D6"
-                            />
-                            <path
-                                d="M10 17L6 13L7.41 11.59L10 14.17L16.59 7.58L18 9L10 17Z"
-                                fill="white"
-                            />
+                            <rect width="24" height="24" rx="5.25" fill={colors.accent} />
+                            <path d="M6.75 10.5C4.13 9.94 1.69 10.5 1.69 12C1.69 13.5 4.13 14.06 6.75 13.5Z" fill="#F7A325" />
+                            <path d="M11.25 10.31H21A.75.75 0 0 1 21.75 11.06V12.56A.75.75 0 0 1 21 13.31H20.25V15.75A.56.56 0 0 1 19.69 16.31H18.56A.56.56 0 0 1 18 15.75V13.31H16.88V14.81A.56.56 0 0 1 16.31 15.38H15.19A.56.56 0 0 1 14.63 14.81V13.31H11.25Z" fill="#FFF6E0" />
+                            <circle cx="9" cy="11.81" r="5.06" fill="#FFF6E0" />
+                            <circle cx="9.38" cy="10.31" r="0.94" fill="#0A5048" />
                         </svg>
-                        <span style={styles.headerText}>Ente Auth Extension</span>
+                        <span style={styles.headerText}>Duckey</span>
                     </div>
                     <div style={styles.savedMessage}>
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -478,14 +476,11 @@ const Dropdown: React.FC<DropdownProps> = ({
                         </button>
                     )}
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                        <path
-                            d="M12 2L3 7V12C3 16.97 6.84 21.66 12 23C17.16 21.66 21 16.97 21 12V7L12 2Z"
-                            fill="#8F33D6"
-                        />
-                        <path
-                            d="M10 17L6 13L7.41 11.59L10 14.17L16.59 7.58L18 9L10 17Z"
-                            fill="white"
-                        />
+                        <rect width="24" height="24" rx="5.25" fill={colors.accent} />
+                        <path d="M6.75 10.5C4.13 9.94 1.69 10.5 1.69 12C1.69 13.5 4.13 14.06 6.75 13.5Z" fill="#F7A325" />
+                        <path d="M11.25 10.31H21A.75.75 0 0 1 21.75 11.06V12.56A.75.75 0 0 1 21 13.31H20.25V15.75A.56.56 0 0 1 19.69 16.31H18.56A.56.56 0 0 1 18 15.75V13.31H16.88V14.81A.56.56 0 0 1 16.31 15.38H15.19A.56.56 0 0 1 14.63 14.81V13.31H11.25Z" fill="#FFF6E0" />
+                        <circle cx="9" cy="11.81" r="5.06" fill="#FFF6E0" />
+                        <circle cx="9.38" cy="10.31" r="0.94" fill="#0A5048" />
                     </svg>
                     <span style={styles.headerText}>Search All Codes</span>
                 </div>
@@ -553,16 +548,13 @@ const Dropdown: React.FC<DropdownProps> = ({
         <div ref={dropdownRef} style={styles.dropdown}>
             <div style={styles.header}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                    <path
-                        d="M12 2L3 7V12C3 16.97 6.84 21.66 12 23C17.16 21.66 21 16.97 21 12V7L12 2Z"
-                        fill="#8F33D6"
-                    />
-                    <path
-                        d="M10 17L6 13L7.41 11.59L10 14.17L16.59 7.58L18 9L10 17Z"
-                        fill="white"
-                    />
+                    <rect width="24" height="24" rx="5.25" fill={colors.accent} />
+                    <path d="M6.75 10.5C4.13 9.94 1.69 10.5 1.69 12C1.69 13.5 4.13 14.06 6.75 13.5Z" fill="#F7A325" />
+                    <path d="M11.25 10.31H21A.75.75 0 0 1 21.75 11.06V12.56A.75.75 0 0 1 21 13.31H20.25V15.75A.56.56 0 0 1 19.69 16.31H18.56A.56.56 0 0 1 18 15.75V13.31H16.88V14.81A.56.56 0 0 1 16.31 15.38H15.19A.56.56 0 0 1 14.63 14.81V13.31H11.25Z" fill="#FFF6E0" />
+                    <circle cx="9" cy="11.81" r="5.06" fill="#FFF6E0" />
+                    <circle cx="9.38" cy="10.31" r="0.94" fill="#0A5048" />
                 </svg>
-                <span style={styles.headerText}>Ente Auth Extension</span>
+                <span style={styles.headerText}>Duckey</span>
             </div>
             <div style={styles.list}>
                 {matches.length === 0 ? (
@@ -628,12 +620,14 @@ interface AuthPromptDropdownProps {
     needsLogin: boolean;
     onClose: () => void;
     theme: ResolvedTheme;
+    accentColor: string;
 }
 
 const AuthPromptDropdown: React.FC<AuthPromptDropdownProps> = ({
     needsLogin,
     onClose,
     theme,
+    accentColor,
 }) => {
     const [password, setPassword] = useState("");
     const [error, setError] = useState<string | null>(null);
@@ -692,7 +686,7 @@ const AuthPromptDropdown: React.FC<AuthPromptDropdownProps> = ({
         }
     };
 
-    const colors = themeColors[theme];
+    const colors = { ...themeColors[theme], accent: accentColor };
 
     const styles: Record<string, React.CSSProperties> = {
         dropdown: {
@@ -753,7 +747,7 @@ const AuthPromptDropdown: React.FC<AuthPromptDropdownProps> = ({
             fontSize: "14px",
             fontWeight: 600,
             color: "#FFFFFF",
-            backgroundColor: colors.accentPurple,
+            backgroundColor: colors.accent,
             border: "none",
             borderRadius: "6px",
             cursor: "pointer",
@@ -770,17 +764,14 @@ const AuthPromptDropdown: React.FC<AuthPromptDropdownProps> = ({
         <div ref={dropdownRef} style={styles.dropdown}>
             <div style={styles.header}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                    <path
-                        d="M12 2L3 7V12C3 16.97 6.84 21.66 12 23C17.16 21.66 21 16.97 21 12V7L12 2Z"
-                        fill="#8F33D6"
-                    />
-                    <path
-                        d="M10 17L6 13L7.41 11.59L10 14.17L16.59 7.58L18 9L10 17Z"
-                        fill="white"
-                    />
+                    <rect width="24" height="24" rx="5.25" fill={colors.accent} />
+                    <path d="M6.75 10.5C4.13 9.94 1.69 10.5 1.69 12C1.69 13.5 4.13 14.06 6.75 13.5Z" fill="#F7A325" />
+                    <path d="M11.25 10.31H21A.75.75 0 0 1 21.75 11.06V12.56A.75.75 0 0 1 21 13.31H20.25V15.75A.56.56 0 0 1 19.69 16.31H18.56A.56.56 0 0 1 18 15.75V13.31H16.88V14.81A.56.56 0 0 1 16.31 15.38H15.19A.56.56 0 0 1 14.63 14.81V13.31H11.25Z" fill="#FFF6E0" />
+                    <circle cx="9" cy="11.81" r="5.06" fill="#FFF6E0" />
+                    <circle cx="9.38" cy="10.31" r="0.94" fill="#0A5048" />
                 </svg>
                 <span style={styles.headerText}>
-                    {needsLogin ? "Ente Auth Extension" : "Vault Locked"}
+                    {needsLogin ? "Duckey" : "Vault Locked"}
                 </span>
             </div>
             {needsLogin ? (
@@ -837,7 +828,7 @@ const AuthPromptDropdown: React.FC<AuthPromptDropdownProps> = ({
 interface AutofillIconProps {
     matches: DomainMatch[];
     timeOffset: number;
-    onFill: (code: string) => void;
+    onFill: (code: string, userInitiated?: boolean) => void;
     inputElement: HTMLInputElement;
     autoFillSingleMatch: boolean;
     domain: string;
@@ -863,11 +854,21 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
         (matches.length > 0 || !autoFillSingleMatch);
     const [isOpen, setIsOpen] = useState(() => shouldAutoOpenDropdown);
     const [theme, setTheme] = useState<ResolvedTheme>("dark");
+    const [accentColor, setAccentColor] = useState(ACCENT_COLORS.duckey);
+    // Packaged icon for the default accent, otherwise draw it in the user's color
+    const iconSrc = useMemo(
+        () =>
+            accentColor === ACCENT_COLORS.duckey
+                ? browser.runtime.getURL("assets/icons/icon32.png")
+                : renderDuckeyIconDataUrl(accentColor, 40),
+        [accentColor]
+    );
     const containerRef = useRef<HTMLDivElement>(null);
 
     // Load theme on mount
     useEffect(() => {
         getResolvedTheme().then(setTheme);
+        getResolvedAccentColor().then(setAccentColor);
     }, []);
 
     // Auto-fill if single match and setting enabled
@@ -877,7 +878,7 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
             const [otp] = generateOTPs(code, timeOffset);
             // Small delay to let the UI render
             setTimeout(() => {
-                onFill(otp);
+                onFill(otp, false);
             }, 100);
         }
     }, [matches, timeOffset, onFill, autoFillSingleMatch, isAuthenticated]);
@@ -894,10 +895,10 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
     };
 
     const iconTitle = isAuthenticated
-        ? "Ente Auth Extension - Click to autofill"
+        ? "Duckey - Click to autofill"
         : needsLogin
-            ? "Ente Auth Extension - Click to log in"
-            : "Ente Auth Extension - Click to unlock";
+            ? "Duckey - Click to log in"
+            : "Duckey - Click to unlock";
 
     const styles: Record<string, React.CSSProperties> = {
         container: {
@@ -942,10 +943,10 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
                 }}
                 title={iconTitle}
             >
-                {/* Use the same PNG icon as extension toolbar */}
+                {/* 32px+ source rendered at 20px stays sharp on HiDPI displays */}
                 <img
-                    src={browser.runtime.getURL("assets/icons/icon16.png")}
-                    alt="Ente Auth Extension"
+                    src={iconSrc}
+                    alt="Duckey"
                     width="20"
                     height="20"
                     style={styles.iconImage}
@@ -958,6 +959,7 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
                     onFill={handleFill}
                     onClose={() => setIsOpen(false)}
                     theme={theme}
+                    accentColor={accentColor}
                     domain={domain}
                 />
             )}
@@ -966,6 +968,7 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
                     needsLogin={needsLogin}
                     onClose={() => setIsOpen(false)}
                     theme={theme}
+                    accentColor={accentColor}
                 />
             )}
         </div>
@@ -1017,7 +1020,7 @@ const positionIcon = (
 export const showPopup = (
     matches: DomainMatch[],
     timeOffset: number,
-    onFill: (code: string) => void,
+    onFill: (code: string, userInitiated?: boolean) => void,
     inputElement?: HTMLInputElement,
     autoFillSingleMatch = true,
     authState?: AuthState,

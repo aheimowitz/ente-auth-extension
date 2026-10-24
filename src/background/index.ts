@@ -4,6 +4,8 @@
  */
 import type Browser from "webextension-polyfill";
 import { browser, createAlarm, onAlarm, onMessage, onIdleStateChange, setIdleDetectionInterval } from "@shared/browser";
+import { resolveAccentColor } from "@shared/accent";
+import { updateToolbarIcon } from "@shared/icon";
 import { matchCodesToDomain, setCustomMappings } from "@shared/domain-matcher";
 import { setApiBaseUrl } from "@shared/api";
 import type {
@@ -17,12 +19,47 @@ import { scanQRFromPage } from "./qr-scanner";
 
 const SYNC_ALARM_NAME = "ente-auth-sync";
 
+// Messages that change login / lock state; open tabs are told so their
+// inline autofill icon updates
+const AUTH_CHANGING_MESSAGES = new Set<string>([
+    "LOGIN",
+    "LOGIN_COMPLETE",
+    "UNLOCK",
+    "UNLOCK_WITH_PIN",
+    "LOCK",
+    "LOGOUT",
+]);
+
+/**
+ * Tell content scripts in every tab that auth state changed. They can't rely on
+ * storage.onChanged for this: the unlocked master key lives in storage.session,
+ * whose changes don't reach content scripts (issue #22).
+ */
+const broadcastAuthStateChanged = async (): Promise<void> => {
+    const tabs = await browser.tabs.query({});
+    await Promise.all(
+        tabs.map((tab) =>
+            tab.id === undefined
+                ? undefined
+                : browser.tabs.sendMessage(tab.id, { type: "AUTH_STATE_CHANGED" }).catch(() => {
+                      // No content script in this tab (chrome:// pages, etc.)
+                  })
+        )
+    );
+};
+
 // Register message listener immediately (synchronously) so it's available
 // as soon as the service worker starts. This prevents "Receiving end does not exist"
 // errors when the service worker is woken up by a message.
 onMessage((message, sender, sendResponse) => {
     handleMessage(message as ExtensionMessage, sender)
-        .then(sendResponse)
+        .then((response) => {
+            sendResponse(response);
+            const type = (message as ExtensionMessage).type;
+            if (AUTH_CHANGING_MESSAGES.has(type) && (response as { success?: boolean })?.success) {
+                void broadcastAuthStateChanged();
+            }
+        })
         .catch((error) => {
             console.error("Message handler error:", error);
             sendResponse({ success: false, error: error.message });
@@ -36,9 +73,9 @@ onIdleStateChange((state) => {
         const t = settings.vaultTimeout;
         if (state === "locked" && t !== "never" && t !== "onRestart") {
             // System lock triggers all timeout modes except "never" and "onRestart"
-            lock().catch(console.error);
+            lock().then(broadcastAuthStateChanged).catch(console.error);
         } else if (state === "idle" && (t === "5" || t === "15" || t === "60" || t === "240")) {
-            lock().catch(console.error);
+            lock().then(broadcastAuthStateChanged).catch(console.error);
         }
     }).catch(console.error);
 });
@@ -47,12 +84,15 @@ onIdleStateChange((state) => {
  * Initialize the background script (async tasks like alarms).
  */
 const init = async () => {
-    console.log("Ente Auth extension background script initialized");
+    console.log("Duckey background script initialized");
 
     // Set up periodic sync alarm and configure API URL
     const settings = await settingsStorage.getSettings();
     await createAlarm(SYNC_ALARM_NAME, settings.syncInterval);
     setApiBaseUrl(settings.serverUrl);
+
+    // Toolbar icon follows the accent color
+    updateToolbarIcon(resolveAccentColor(settings.accentTheme, settings.accentCustomColor)).catch(console.error);
 
     // Configure idle detection interval for minute-based timeouts
     const minuteTimeouts = ["5", "15", "60", "240"] as const;
@@ -247,6 +287,11 @@ const handleMessage = async (
             // Update API URL if server URL changed
             if (message.settings.serverUrl !== undefined) {
                 setApiBaseUrl(message.settings.serverUrl);
+            }
+            // Recolor the toolbar icon if the accent changed
+            if (message.settings.accentTheme !== undefined || message.settings.accentCustomColor !== undefined) {
+                const updated = await settingsStorage.getSettings();
+                updateToolbarIcon(resolveAccentColor(updated.accentTheme, updated.accentCustomColor)).catch(console.error);
             }
             // Reconfigure idle detection interval if vaultTimeout changed
             if (message.settings.vaultTimeout !== undefined) {

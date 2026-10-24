@@ -114,6 +114,24 @@ export const getAuthenticatorEntityKey = async (
 };
 
 /**
+ * Store a newly created authenticator entity key. New accounts have none
+ * until a client creates it (issue #25).
+ */
+export const createAuthenticatorEntityKey = async (
+    token: string,
+    key: AuthenticatorEntityKey
+): Promise<void> => {
+    const url = buildApiUrl("authenticator/key");
+    await authenticatedFetch(url, token, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ encryptedKey: key.encryptedKey, header: key.header }),
+    });
+};
+
+/**
  * Decrypt the authenticator key using the master key.
  */
 const decryptAuthenticatorKey = async (

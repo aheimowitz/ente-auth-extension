@@ -81,7 +81,7 @@ body {
 }
 
 .icon-button.active {
-    color: var(--accent-purple);
+    color: var(--accent);
 }
 
 /* Sort dropdown */
@@ -152,7 +152,7 @@ body {
 }
 
 .filter-pill.active {
-    background-color: var(--accent-purple);
+    background-color: var(--accent);
     color: #fff;
 }
 
@@ -185,7 +185,7 @@ body {
 }
 
 .search-input:focus {
-    border-color: var(--accent-purple);
+    border-color: var(--accent);
 }
 
 /* Codes list */
@@ -264,7 +264,7 @@ body {
     top: 0;
     left: 0;
     height: 4px;
-    background-color: var(--accent-purple);
+    background-color: var(--accent);
     border-radius: 0 2px 2px 0;
     will-change: width;
 }
@@ -303,7 +303,7 @@ body {
     right: 3px;
     width: 10px;
     height: 10px;
-    color: var(--accent-purple);
+    color: var(--accent);
     transform: rotate(45deg);
 }
 
@@ -490,13 +490,13 @@ body {
 }
 
 .auth-input:focus {
-    border-color: var(--accent-purple);
+    border-color: var(--accent);
 }
 
 .auth-button {
     width: 100%;
     padding: 14px 24px;
-    background-color: var(--accent-purple);
+    background-color: var(--accent);
     border: none;
     border-radius: 4px;
     color: #fff;
@@ -509,7 +509,7 @@ body {
 }
 
 .auth-button:hover {
-    background-color: var(--accent-purple-hover);
+    background-color: var(--accent-hover);
 }
 
 .auth-button:disabled {
@@ -534,7 +534,7 @@ body {
 }
 
 .auth-link {
-    color: var(--accent-purple);
+    color: var(--accent);
     text-decoration: none;
     font-size: 14px;
     font-weight: 500;
@@ -567,7 +567,7 @@ body {
 }
 
 .syncing {
-    color: var(--accent-purple);
+    color: var(--accent);
 }
 
 /* Code card action buttons */
@@ -606,12 +606,12 @@ body {
 }
 
 .code-action-button.active {
-    background-color: var(--accent-purple);
+    background-color: var(--accent);
     color: #fff;
 }
 
 .code-action-button.active:hover {
-    background-color: var(--accent-purple-hover);
+    background-color: var(--accent-hover);
 }
 
 /* Floating Action Button (FAB) - Ente Auth style */
@@ -789,7 +789,7 @@ body {
 
 .form-field input:focus,
 .form-field select:focus {
-    border-color: var(--accent-purple);
+    border-color: var(--accent);
 }
 
 .form-field input:disabled,
@@ -918,12 +918,12 @@ body {
 }
 
 .tag-chip.selected {
-    background-color: var(--accent-purple);
+    background-color: var(--accent);
     color: #fff;
 }
 
 .tag-chip.selected:hover {
-    background-color: var(--accent-purple-hover);
+    background-color: var(--accent-hover);
 }
 
 /* 3-dot menu trigger in selected tag */
@@ -1036,12 +1036,12 @@ body {
 }
 
 .tag-chip-toggle.selected {
-    background-color: var(--accent-purple);
+    background-color: var(--accent);
     color: #fff;
 }
 
 .tag-chip-toggle.selected:hover {
-    background-color: var(--accent-purple-hover);
+    background-color: var(--accent-hover);
 }
 
 .tag-chip-toggle:disabled {
@@ -1058,14 +1058,14 @@ body {
     border: none;
     border-radius: 50%;
     background: transparent;
-    color: var(--accent-purple);
+    color: var(--accent);
     cursor: pointer;
     transition: all 0.15s;
     flex-shrink: 0;
 }
 
 .tag-add-btn:hover {
-    color: var(--accent-purple-hover);
+    color: var(--accent-hover);
 }
 
 .tag-add-btn:disabled {
@@ -1094,7 +1094,7 @@ body {
 }
 
 .add-tag-input:focus {
-    border-color: var(--accent-purple);
+    border-color: var(--accent);
 }
 
 .add-tag-input::placeholder {
@@ -1103,7 +1103,7 @@ body {
 
 .add-tag-btn {
     padding: 10px 16px;
-    background-color: var(--accent-purple);
+    background-color: var(--accent);
     border: none;
     border-radius: 8px;
     color: #fff;
@@ -1115,7 +1115,7 @@ body {
 }
 
 .add-tag-btn:hover {
-    background-color: var(--accent-purple-hover);
+    background-color: var(--accent-hover);
 }
 
 .add-tag-btn:disabled {
@@ -1204,13 +1204,13 @@ body {
 }
 
 .save-button {
-    background-color: var(--accent-purple);
+    background-color: var(--accent);
     border: none;
     color: #fff;
 }
 
 .save-button:hover {
-    background-color: var(--accent-purple-hover);
+    background-color: var(--accent-hover);
 }
 
 .save-button:disabled,
@@ -1319,7 +1319,7 @@ body {
 }
 
 .modal-input:focus {
-    border-color: var(--accent-purple);
+    border-color: var(--accent);
 }
 
 .modal-input::placeholder {
@@ -1362,12 +1362,12 @@ body {
 }
 
 .modal-button.save {
-    background-color: var(--accent-purple);
+    background-color: var(--accent);
     color: #fff;
 }
 
 .modal-button.save:hover {
-    background-color: var(--accent-purple-hover);
+    background-color: var(--accent-hover);
 }
 
 .modal-button.save:disabled {

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>13. Username-only sign-in step with 2FA copy (regression check)</title>
+    <link rel="stylesheet" href="_shared.css" />
+</head>
+<body>
+    <a class="back" href="../index.html">&larr; Back to index</a>
+    <h1>13. Username-only sign-in step with 2FA copy (regression check)</h1>
+    <div class="expect no">Should NOT show icon &mdash; this is the username step</div>
+
+    <form action="#" method="post">
+        <h2>Sign in</h2>
+        <p>Your account is protected by two-factor authentication.</p>
+        <label for="login-user">Email or username</label>
+        <input type="text" id="login-user" name="login" autocomplete="username" class="single" />
+        <input type="submit" value="Next" />
+    </form>
+
+    <p class="hint">
+        Single-field form mentioning 2FA. The form-context signal skips
+        username/email fields so the first step of a two-step login isn't flagged.
+    </p>
+</body>
+</html>

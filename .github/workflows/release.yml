@@ -17,9 +17,28 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      # Store credentials. Each publish step is skipped when its secrets are unset.
+      AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+      AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+      # "listed" publishes to addons.mozilla.org; "unlisted" (default) only signs the .xpi.
+      AMO_CHANNEL: ${{ vars.AMO_CHANNEL || 'unlisted' }}
+      # Set the STORE_PUBLISH repo variable to "off" to build the release without
+      # touching any store (e.g. when a version is submitted to the stores by hand).
+      STORE_PUBLISH: ${{ vars.STORE_PUBLISH || 'on' }}
+      CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+      CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+      CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+      CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+      EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
+      EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
+      EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -28,17 +47,13 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build for Chrome
         run: npm run build:chrome
-        env:
-          NODE_ENV: production
 
       - name: Build for Firefox
         run: npm run build:firefox
-        env:
-          NODE_ENV: production
 
       - name: Get version
         id: version
@@ -49,25 +64,67 @@ jobs:
             echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Check manifest versions match
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          for f in dist-chrome/manifest.json dist-firefox/manifest.json; do
+            MANIFEST_VERSION=$(node -p "require('./$f').version")
+            if [ "$MANIFEST_VERSION" != "$VERSION" ]; then
+              echo "::error::$f has version $MANIFEST_VERSION, expected $VERSION"
+              exit 1
+            fi
+          done
+
       - name: Create Chrome zip
         run: |
           cd dist-chrome
-          zip -r ../ente-auth-chrome-${{ steps.version.outputs.version }}.zip .
+          zip -r ../duckey-chrome-${{ steps.version.outputs.version }}.zip .
 
       - name: Create Firefox zip (unsigned)
         run: |
           cd dist-firefox
-          zip -r ../ente-auth-firefox-${{ steps.version.outputs.version }}.zip .
+          zip -r ../duckey-firefox-${{ steps.version.outputs.version }}.zip .
 
-      - name: Sign Firefox extension
-        if: ${{ env.AMO_JWT_ISSUER != '' }}
-        env:
-          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
-          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+      # AMO reviewers rebuild from source because the output is bundled by webpack.
+      - name: Create source zip
+        run: git archive --format=zip -o duckey-source-${{ steps.version.outputs.version }}.zip HEAD
+
+      - name: Sign / publish Firefox extension
+        if: ${{ env.AMO_JWT_ISSUER != '' && env.STORE_PUBLISH != 'off' }}
         run: |
-          npm install -g web-ext
-          web-ext sign --source-dir=dist-firefox --channel=unlisted --api-key=$AMO_JWT_ISSUER --api-secret=$AMO_JWT_SECRET
-          mv web-ext-artifacts/*.xpi ente-auth-firefox-${{ steps.version.outputs.version }}.xpi
+          npm install -g web-ext@8
+          if [ "$AMO_CHANNEL" = "listed" ]; then
+            # Listed versions are signed after AMO review, so don't wait for an .xpi.
+            web-ext sign --source-dir=dist-firefox --channel=listed \
+              --upload-source-code=duckey-source-${{ steps.version.outputs.version }}.zip \
+              --approval-timeout=0 \
+              --api-key=$AMO_JWT_ISSUER --api-secret=$AMO_JWT_SECRET
+          else
+            web-ext sign --source-dir=dist-firefox --channel=unlisted \
+              --api-key=$AMO_JWT_ISSUER --api-secret=$AMO_JWT_SECRET
+            mv web-ext-artifacts/*.xpi duckey-firefox-${{ steps.version.outputs.version }}.xpi
+          fi
+
+      - name: Publish to Chrome Web Store
+        if: ${{ env.CWS_REFRESH_TOKEN != '' && env.STORE_PUBLISH != 'off' }}
+        run: |
+          npx --yes chrome-webstore-upload-cli@3 upload \
+            --source duckey-chrome-${{ steps.version.outputs.version }}.zip \
+            --extension-id "$CWS_EXTENSION_ID" \
+            --client-id "$CWS_CLIENT_ID" \
+            --client-secret "$CWS_CLIENT_SECRET" \
+            --refresh-token "$CWS_REFRESH_TOKEN" \
+            --auto-publish
+
+      # Edge uses the Chrome (MV3) build as-is.
+      - name: Publish to Edge Add-ons
+        if: ${{ env.EDGE_API_KEY != '' && env.STORE_PUBLISH != 'off' }}
+        uses: wdzeng/edge-addon@v2
+        with:
+          product-id: ${{ env.EDGE_PRODUCT_ID }}
+          zip-path: duckey-chrome-${{ steps.version.outputs.version }}.zip
+          client-id: ${{ env.EDGE_CLIENT_ID }}
+          api-key: ${{ env.EDGE_API_KEY }}
 
       - name: Generate Release Notes
         id: release_notes
@@ -96,8 +153,9 @@ jobs:
           body: ${{ steps.release_notes.outputs.notes }}
           fail_on_unmatched_files: false
           files: |
-            ente-auth-chrome-${{ steps.version.outputs.version }}.zip
-            ente-auth-firefox-${{ steps.version.outputs.version }}.zip
-            ente-auth-firefox-${{ steps.version.outputs.version }}.xpi
+            duckey-chrome-${{ steps.version.outputs.version }}.zip
+            duckey-firefox-${{ steps.version.outputs.version }}.zip
+            duckey-firefox-${{ steps.version.outputs.version }}.xpi
+            duckey-source-${{ steps.version.outputs.version }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

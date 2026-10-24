@@ -1,15 +1,15 @@
 {
     "manifest_version": 2,
-    "name": "Ente Auth Extension",
-    "version": "0.5.0",
-    "description": "Secure 2FA autofill from your Ente Auth vault",
+    "name": "Duckey: 2FA Autofill for Ente Auth",
+    "short_name": "Duckey",
+    "version": "1.0.0",
+    "description": "Fill 2FA codes from your Ente Auth vault in one click. Unofficial; not affiliated with Ente.",
+    "homepage_url": "https://github.com/aheimowitz/ente-auth-extension",
     "permissions": [
         "storage",
         "activeTab",
-        "tabs",
         "alarms",
         "idle",
-        "https://api.ente.io/*",
         "<all_urls>"
     ],
     "background": {
@@ -46,7 +46,7 @@
     "browser_specific_settings": {
         "gecko": {
             "id": "ente-auth-extension@adamheimowitz.com",
-            "strict_min_version": "109.0",
+            "strict_min_version": "115.0",
             "data_collection_permissions": {
                 "required": ["none"]
             }

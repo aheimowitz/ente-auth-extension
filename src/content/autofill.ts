@@ -4,9 +4,59 @@
 import type { MFAFieldDetection } from "@shared/types";
 
 /**
- * Fill an MFA code into the detected field(s) and optionally submit.
+ * Maximum number of automatic (non-user-initiated) submit attempts per page
+ * path. Prevents a failing submission that reloads the page from looping and
+ * tripping site rate limits / anti-bot checks.
  */
-export const fillCode = (detection: MFAFieldDetection, code: string, autoSubmit = true): void => {
+const MAX_AUTO_SUBMIT_ATTEMPTS = 2;
+
+/**
+ * SessionStorage key for tracking auto-submit attempts on the current page.
+ */
+const SUBMIT_ATTEMPTS_KEY = "ente_auth_submit_attempts";
+
+/**
+ * Get the number of auto-submit attempts recorded for the current page path.
+ */
+const getSubmitAttempts = (): number => {
+    try {
+        const data = sessionStorage.getItem(SUBMIT_ATTEMPTS_KEY);
+        if (!data) return 0;
+        const parsed = JSON.parse(data) as { path?: string; count?: number };
+        return parsed.path === window.location.pathname ? parsed.count || 0 : 0;
+    } catch {
+        return 0;
+    }
+};
+
+/**
+ * Increment the auto-submit attempt counter for the current page path.
+ */
+const incrementSubmitAttempts = (): void => {
+    try {
+        sessionStorage.setItem(
+            SUBMIT_ATTEMPTS_KEY,
+            JSON.stringify({
+                path: window.location.pathname,
+                count: getSubmitAttempts() + 1,
+            })
+        );
+    } catch {
+        // Ignore storage errors (e.g. sandboxed iframes)
+    }
+};
+
+/**
+ * Fill an MFA code into the detected field(s) and optionally submit.
+ * User-initiated fills always submit; automatic fills (single-match autofill)
+ * are capped at MAX_AUTO_SUBMIT_ATTEMPTS per page path.
+ */
+export const fillCode = (
+    detection: MFAFieldDetection,
+    code: string,
+    autoSubmit = true,
+    userInitiated = true
+): void => {
     if (detection.type === "split" && detection.splitInputs) {
         fillSplitInputs(detection.splitInputs, code);
     } else {
@@ -15,9 +65,14 @@ export const fillCode = (detection: MFAFieldDetection, code: string, autoSubmit 
 
     // Auto-submit after a short delay to let frameworks process the input
     if (autoSubmit) {
-        setTimeout(() => {
-            clickSubmitButton(detection.element);
-        }, 100);
+        if (userInitiated || getSubmitAttempts() < MAX_AUTO_SUBMIT_ATTEMPTS) {
+            incrementSubmitAttempts();
+            setTimeout(() => {
+                clickSubmitButton(detection.element);
+            }, 100);
+        } else {
+            console.log("[Ente Auth] Auto-submit skipped: max attempts reached for this page");
+        }
     }
 };
 
