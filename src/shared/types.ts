@@ -56,6 +56,12 @@ export interface CodeDisplay {
 export type ThemeMode = "light" | "dark" | "system";
 
 /**
+ * Accent color scheme: Duckey's mallard green, the Ente Auth purple, or a
+ * user-picked color (see `accentCustomColor`).
+ */
+export type AccentTheme = "duckey" | "ente" | "custom";
+
+/**
  * When the vault should auto-lock. Minute values are string representations
  * of the idle threshold in minutes.
  */
@@ -82,11 +88,15 @@ export interface ExtensionSettings {
     syncInterval: number;
     /** Theme mode. Default: "system" */
     theme: ThemeMode;
+    /** Accent color scheme. Default: "duckey" */
+    accentTheme: AccentTheme;
+    /** Hex color used when accentTheme is "custom". Default: "#2F6FDE" */
+    accentCustomColor: string;
     /** When the vault auto-locks. Default: "never" */
     vaultTimeout: VaultTimeout;
     /** Custom server URL for self-hosted instances. Empty string means use Ente Cloud. */
     serverUrl: string;
-    /** Custom accounts URL for passkey verification on self-hosted instances. Empty string means use accounts.ente.io. */
+    /** Custom accounts URL for passkey verification. Empty string means use the URL the server provides. */
     accountsUrl: string;
     /** Sort order for codes list. Default: "issuer" */
     sortOrder: "issuer" | "account" | "recent";
@@ -100,6 +110,8 @@ export const defaultSettings: ExtensionSettings = {
     autoFillSingleMatch: true,
     syncInterval: 5,
     theme: "system",
+    accentTheme: "duckey",
+    accentCustomColor: "#2F6FDE",
     vaultTimeout: "never",
     serverUrl: "",
     accountsUrl: "",
@@ -272,6 +284,12 @@ export interface SRPVerificationResponse {
     srpM2: string;
     twoFactorSessionID?: string;
     passkeySessionID?: string;
+    /**
+     * Accounts app to verify the passkey on, sent with passkeySessionID. The
+     * server picks it per user (accounts.ente.com, or accounts.ente.io for
+     * passkeys registered before Ente's domain move).
+     */
+    accountsUrl?: string;
     twoFactorSessionIDV2?: string;
 }
 
@@ -285,6 +303,12 @@ export interface EmailVerificationResponse {
     token?: string;
     twoFactorSessionID?: string;
     passkeySessionID?: string;
+    /**
+     * Accounts app to verify the passkey on, sent with passkeySessionID. The
+     * server picks it per user (accounts.ente.com, or accounts.ente.io for
+     * passkeys registered before Ente's domain move).
+     */
+    accountsUrl?: string;
     twoFactorSessionIDV2?: string;
 }
 

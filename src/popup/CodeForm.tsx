@@ -248,7 +248,7 @@ export const CodeForm: React.FC<CodeFormProps> = ({
                                 {tag}
                             </button>
                         ))}
-                        {/* Add new tag button - purple plus circle outline */}
+                        {/* Add new tag button - accent plus circle outline */}
                         <button
                             type="button"
                             className="tag-add-btn"

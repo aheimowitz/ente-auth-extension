@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>12. Rails-style 2FA form with few hints (issue #26)</title>
+    <link rel="stylesheet" href="_shared.css" />
+</head>
+<body>
+    <a class="back" href="../index.html">&larr; Back to index</a>
+    <h1>12. Rails-style 2FA form with few hints (issue #26)</h1>
+    <div class="expect yes">Should show icon &mdash; the form's only field, under 2FA wording</div>
+
+    <form action="#" method="post">
+        <h2>Two-factor authentication</h2>
+        <p>Please enter your 2FA key from your authentication app.</p>
+        <input type="hidden" name="authenticity_token" value="x" />
+        <div class="form-floating">
+            <input placeholder=" " required="required" type="text" name="user[code]" id="user_code" autocomplete="off" class="single" />
+            <label for="user_code">2FA Key</label>
+        </div>
+        <input type="submit" name="commit" value="Verify" />
+    </form>
+
+    <p class="hint">
+        Modeled on Nexus Mods' server-rendered sign-in (issue #26): no inputmode,
+        maxlength, pattern or one-time-code. Only the label and surrounding form
+        text say it's a 2FA code.
+    </p>
+</body>
+</html>

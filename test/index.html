@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Ente Auth Extension — detector fixtures</title>
+    <title>Duckey — detector fixtures</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -45,7 +45,7 @@
     </style>
 </head>
 <body>
-    <h1>Ente Auth Extension — detector fixtures</h1>
+    <h1>Duckey — detector fixtures</h1>
     <p>Each link opens one isolated test case. Green = icon should appear. Red = icon should NOT appear.</p>
 
     <ul>
@@ -125,6 +125,20 @@
                 <div class="desc">autocomplete="one-time-code" must beat nearby OOB text</div>
             </div>
             <span class="badge yes">Show</span>
+        </li>
+        <li>
+            <div>
+                <a href="cases/12-rails-2fa-key.html">12. Rails-style 2FA form with few hints (issue #26)</a>
+                <div class="desc">Only field in a form under "Two-factor authentication", label "2FA Key"</div>
+            </div>
+            <span class="badge yes">Show</span>
+        </li>
+        <li>
+            <div>
+                <a href="cases/13-username-step-2fa-copy.html">13. Username-only step with 2FA copy</a>
+                <div class="desc">autocomplete="username", form text mentions two-factor</div>
+            </div>
+            <span class="badge no">Hide</span>
         </li>
     </ul>
 </body>

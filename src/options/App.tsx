@@ -1,12 +1,13 @@
 /**
  * Options page application component.
  */
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import { browser, sendMessage } from "@shared/browser";
-import { useTheme } from "@shared/useTheme";
+import { applyAccent, useTheme } from "@shared/useTheme";
 import { getBuiltInMappings } from "@shared/domain-matcher";
-import type { AuthState, Code, CustomDomainMapping, ExtensionSettings, ThemeMode, VaultTimeout } from "@shared/types";
+import type { AccentTheme, AuthState, Code, CustomDomainMapping, ExtensionSettings, ThemeMode, VaultTimeout } from "@shared/types";
 import { SearchableSelect } from "./SearchableSelect";
+import { AccentPicker } from "./AccentPicker";
 
 /**
  * Get the extension version from the manifest.
@@ -166,6 +167,18 @@ export const App: React.FC = () => {
         });
     };
 
+    // Apply accent changes live; save after the user pauses (the color
+    // picker fires continuously while dragging)
+    const accentSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    const handleAccentChange = (accentTheme: AccentTheme, accentCustomColor: string) => {
+        applyAccent(accentTheme, accentCustomColor);
+        setSettings((prev) => (prev ? { ...prev, accentTheme, accentCustomColor } : null));
+        clearTimeout(accentSaveTimer.current);
+        accentSaveTimer.current = setTimeout(() => {
+            saveSettings({ accentTheme, accentCustomColor });
+        }, 400);
+    };
+
     // Add custom mapping
     const handleAddMapping = async () => {
         if (!newMappingDomain.trim() || !newMappingIssuer) return;
@@ -257,7 +270,7 @@ export const App: React.FC = () => {
         <div className="options-container">
             <div className="options-header">
                 <Logo />
-                <h1>Ente Auth Extension Settings</h1>
+                <h1>Duckey Settings</h1>
             </div>
 
             <div className="options-content">
@@ -268,20 +281,28 @@ export const App: React.FC = () => {
                         <div className="setting-info">
                             <label>Theme</label>
                             <p>
-                                Choose your preferred color scheme.
+                                Choose light or dark, and an accent color.
                             </p>
                         </div>
-                        <select
-                            value={settings.theme}
-                            onChange={(e) =>
-                                handleThemeChange(e.target.value as ThemeMode)
-                            }
-                            className="select-input"
-                        >
-                            <option value="system">System</option>
-                            <option value="light">Light</option>
-                            <option value="dark">Dark</option>
-                        </select>
+                        <div className="theme-controls">
+                            <select
+                                value={settings.theme}
+                                onChange={(e) =>
+                                    handleThemeChange(e.target.value as ThemeMode)
+                                }
+                                className="select-input"
+                                aria-label="Light or dark"
+                            >
+                                <option value="system">System</option>
+                                <option value="light">Light</option>
+                                <option value="dark">Dark</option>
+                            </select>
+                            <AccentPicker
+                                accent={settings.accentTheme}
+                                customColor={settings.accentCustomColor}
+                                onChange={handleAccentChange}
+                            />
+                        </div>
                     </div>
                 </section>
 
@@ -689,13 +710,13 @@ export const App: React.FC = () => {
                         <div className="setting-info">
                             <label>Accounts URL</label>
                             <p>
-                                URL of the Ente Accounts web app. Required for passkeys on self-hosted instances.
+                                URL of the Ente Accounts web app, used for passkeys. Leave empty to use the one your server provides.
                             </p>
                         </div>
                         <input
                             type="url"
                             className="text-input"
-                            placeholder="https://accounts.ente.io"
+                            placeholder="Provided by your server"
                             value={settings.accountsUrl || ""}
                             onChange={(e) => {
                                 const newUrl = e.target.value;
@@ -762,7 +783,7 @@ export const App: React.FC = () => {
 
             <div className="options-footer">
                 <p>
-                    Ente Auth Extension v{getExtensionVersion()} •{" "}
+                    Duckey v{getExtensionVersion()} •{" "}
                     <a
                         href="https://github.com/aheimowitz/ente-auth-extension"
                         target="_blank"
@@ -784,16 +805,13 @@ export const App: React.FC = () => {
     );
 };
 
-// Logo component - Ente Auth purple
+// Logo component - Duckey duck-key mark
 const Logo: React.FC = () => (
     <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
-        <path
-            d="M12 2L3 7V12C3 16.97 6.84 21.66 12 23C17.16 21.66 21 16.97 21 12V7L12 2Z"
-            fill="#8F33D6"
-        />
-        <path
-            d="M10 17L6 13L7.41 11.59L10 14.17L16.59 7.58L18 9L10 17Z"
-            fill="white"
-        />
+        <rect width="24" height="24" rx="5.25" style={{ fill: "var(--accent)" }} />
+        <path d="M6.75 10.5C4.13 9.94 1.69 10.5 1.69 12C1.69 13.5 4.13 14.06 6.75 13.5Z" fill="#F7A325" />
+        <path d="M11.25 10.31H21A.75.75 0 0 1 21.75 11.06V12.56A.75.75 0 0 1 21 13.31H20.25V15.75A.56.56 0 0 1 19.69 16.31H18.56A.56.56 0 0 1 18 15.75V13.31H16.88V14.81A.56.56 0 0 1 16.31 15.38H15.19A.56.56 0 0 1 14.63 14.81V13.31H11.25Z" fill="#FFF6E0" />
+        <circle cx="9" cy="11.81" r="5.06" fill="#FFF6E0" />
+        <circle cx="9.38" cy="10.31" r="0.94" fill="#0A5048" />
     </svg>
 );

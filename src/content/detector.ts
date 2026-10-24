@@ -232,6 +232,11 @@ const MFA_LABEL_PATTERNS = [
     "security code",
     "2-factor",
     "two-factor",
+    "two factor",
+    "2fa",
+    "two-step",
+    "two step",
+    "2-step",
     "6-digit code",
     "6 digit code",
     "one-time code",
@@ -335,12 +340,26 @@ const MFA_LABEL_PATTERNS = [
 
 /**
  * Check if a string matches any MFA pattern.
+ * Underscores count as hyphens so snake_case names (e.g. Rails'
+ * "user[two_factor_code]") match the hyphenated patterns.
  */
 const matchesPattern = (value: string | null, patterns: string[]): boolean => {
     if (!value) return false;
-    const lower = value.toLowerCase();
+    const lower = value.toLowerCase().replace(/_/g, "-");
     return patterns.some((pattern) => lower.includes(pattern));
 };
+
+/**
+ * Count visible inputs a user can type into within a form.
+ */
+const countTypeableInputs = (form: HTMLFormElement): number =>
+    Array.from(form.querySelectorAll<HTMLInputElement>("input")).filter(
+        (el) =>
+            !["hidden", "submit", "button", "checkbox", "radio", "image", "reset", "file"].includes(el.type) &&
+            !!el.offsetParent &&
+            !el.disabled &&
+            !el.readOnly
+    ).length;
 
 /**
  * Return true if this input is clearly NOT a TOTP field: a non-MFA code (promo,
@@ -515,6 +534,21 @@ const calculateConfidence = (input: HTMLInputElement): number => {
         if (matchesPattern(containerIdClass, MFA_ATTRIBUTE_PATTERNS)) {
             confidence += 0.2;
         }
+    }
+
+    // A form whose only typeable field sits under 2FA wording ("Two-factor
+    // authentication", "Enter your 2FA key") is almost certainly asking for
+    // the code, even when the field itself has no hints (issue #26).
+    // Username/email fields are skipped: some sign-in forms mention 2FA too.
+    const form = input.closest("form");
+    if (
+        form &&
+        input.autocomplete !== "username" &&
+        input.autocomplete !== "email" &&
+        countTypeableInputs(form) === 1 &&
+        matchesPattern((form.textContent || "").slice(0, 1500), MFA_LABEL_PATTERNS)
+    ) {
+        confidence += 0.25;
     }
 
     // Check ancestor tag names and class/id (catches custom elements like

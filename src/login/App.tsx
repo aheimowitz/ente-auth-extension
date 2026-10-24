@@ -29,7 +29,8 @@ const PASSKEY_POLL_INTERVAL = 1000; // 1s to avoid rate limiting
 const PASSKEY_TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
 export const App: React.FC = () => {
-    useTheme();
+    // Users are signing in to their Ente Auth account here, so use Ente Auth branding
+    useTheme("ente");
 
     const [step, setStep] = useState<Step>("email");
     const [email, setEmail] = useState("");
@@ -46,6 +47,10 @@ export const App: React.FC = () => {
     const [srpAttributes, setSrpAttributes] = useState<SRPAttributes | null>(null);
     const [twoFactorSessionID, setTwoFactorSessionID] = useState<string | null>(null);
     const [passkeySessionID, setPasskeySessionID] = useState<string | null>(null);
+    // Accounts URL the server sent with the passkey session
+    const [passkeyAccountsUrl, setPasskeyAccountsUrl] = useState<string | undefined>(undefined);
+    // Accounts URL the verification tab was opened on, used to close it afterwards
+    const passkeyAccountsUrlRef = useRef<string | null>(null);
     const [stashedEncryptedToken, setStashedEncryptedToken] = useState<string | null>(null);
     const [stashedKeyAttributes, setStashedKeyAttributes] = useState<KeyAttributes | null>(null);
     const [stashedToken, setStashedToken] = useState<string | null>(null);
@@ -103,11 +108,14 @@ export const App: React.FC = () => {
         return getApiBaseUrl();
     };
 
-    const getAccountsUrl = (): string => {
-        if (accountsUrl.trim()) {
-            return accountsUrl.trim().replace(/\/+$/, "");
-        }
-        return "https://accounts.ente.io";
+    /**
+     * Accounts app for passkey verification: the user's override if set,
+     * otherwise the URL the server sent with the passkey session (it differs
+     * per user since Ente moved from ente.io to ente.com), otherwise Ente's default.
+     */
+    const getAccountsUrl = (serverAccountsUrl?: string): string => {
+        const url = accountsUrl.trim() || serverAccountsUrl?.trim() || "https://accounts.ente.com";
+        return url.replace(/\/+$/, "");
     };
 
     /**
@@ -201,7 +209,7 @@ export const App: React.FC = () => {
      */
     const closePasskeyTab = async () => {
         try {
-            const acctUrl = getAccountsUrl();
+            const acctUrl = passkeyAccountsUrlRef.current ?? getAccountsUrl();
             const tabs = await browser.tabs.query({ url: acctUrl + "/*" });
             await Promise.all(
                 tabs
@@ -232,7 +240,7 @@ export const App: React.FC = () => {
     /**
      * Start passkey verification: open accounts tab and begin polling.
      */
-    const startPasskeyVerification = (sessionID: string) => {
+    const startPasskeyVerification = (sessionID: string, serverAccountsUrl?: string) => {
         setError(null);
         setLoading(true);
         passkeyCompleteRef.current = false;
@@ -242,7 +250,8 @@ export const App: React.FC = () => {
         // We can't redirect back to chrome-extension:// (not whitelisted), so we
         // redirect to the accounts URL itself. The tab gets auto-closed by
         // polling before the redirect is visible to the user.
-        const acctUrl = getAccountsUrl();
+        const acctUrl = getAccountsUrl(serverAccountsUrl);
+        passkeyAccountsUrlRef.current = acctUrl;
         const params = new URLSearchParams({
             passkeySessionID: sessionID,
             clientPackage: "io.ente.auth.web",
@@ -419,6 +428,7 @@ export const App: React.FC = () => {
             if (hasPasskey && hasTOTP) {
                 // Both passkey and TOTP available - let user choose
                 setPasskeySessionID(srpResponse.passkeySessionID!);
+                setPasskeyAccountsUrl(srpResponse.accountsUrl);
                 setTwoFactorSessionID(effectiveTwoFactorSessionID!);
                 setLoading(false);
                 setStep("passkey-choice");
@@ -429,8 +439,9 @@ export const App: React.FC = () => {
                 // Passkey only - go directly to passkey step
                 // Don't clear loading - startPasskeyVerification keeps it for the polling spinner
                 setPasskeySessionID(srpResponse.passkeySessionID!);
+                setPasskeyAccountsUrl(srpResponse.accountsUrl);
                 setStep("passkey");
-                startPasskeyVerification(srpResponse.passkeySessionID!);
+                startPasskeyVerification(srpResponse.passkeySessionID!, srpResponse.accountsUrl);
                 return;
             }
 
@@ -488,6 +499,7 @@ export const App: React.FC = () => {
             if (hasPasskey && hasTOTP) {
                 // Both passkey and TOTP available - let user choose
                 setPasskeySessionID(response.passkeySessionID!);
+                setPasskeyAccountsUrl(response.accountsUrl);
                 setTwoFactorSessionID(effectiveTwoFactorSessionID!);
                 if (response.encryptedToken) {
                     setStashedEncryptedToken(response.encryptedToken);
@@ -504,6 +516,7 @@ export const App: React.FC = () => {
                 // Passkey only
                 // Don't clear loading - startPasskeyVerification keeps it for the polling spinner
                 setPasskeySessionID(response.passkeySessionID!);
+                setPasskeyAccountsUrl(response.accountsUrl);
                 if (response.encryptedToken) {
                     setStashedEncryptedToken(response.encryptedToken);
                 }
@@ -511,7 +524,7 @@ export const App: React.FC = () => {
                     setStashedKeyAttributes(response.keyAttributes);
                 }
                 setStep("passkey");
-                startPasskeyVerification(response.passkeySessionID!);
+                startPasskeyVerification(response.passkeySessionID!, response.accountsUrl);
                 return;
             }
 
@@ -870,7 +883,7 @@ export const App: React.FC = () => {
                                 onClick={() => {
                                     if (!passkeySessionID) return;
                                     setStep("passkey");
-                                    startPasskeyVerification(passkeySessionID);
+                                    startPasskeyVerification(passkeySessionID, passkeyAccountsUrl);
                                 }}
                             >
                                 <PasskeyIcon />
@@ -923,7 +936,7 @@ export const App: React.FC = () => {
                                 className="login-button passkey-action-button secondary"
                                 onClick={() => {
                                     if (!passkeySessionID) return;
-                                    startPasskeyVerification(passkeySessionID);
+                                    startPasskeyVerification(passkeySessionID, passkeyAccountsUrl);
                                 }}
                             >
                                 Try again
@@ -971,10 +984,16 @@ export const App: React.FC = () => {
                     </div>
                 )}
             </div>
+            <p className="login-footnote">
+                <LockIcon />
+                Your password never leaves this device. It's only used here to unlock your end-to-end encrypted vault.
+            </p>
+            <p className="login-footnote login-brand">Duckey for Ente Auth</p>
         </div>
     );
 };
 
+// Ente Auth-style shield mark (generic shield, not Ente's logo)
 const Logo: React.FC = () => (
     <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
         <path
@@ -1012,5 +1031,12 @@ const PasskeyIcon: React.FC = () => (
 const AuthenticatorIcon: React.FC = () => (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
         <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2Zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8Zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7Z" />
+    </svg>
+);
+
+const LockIcon: React.FC = () => (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
     </svg>
 );

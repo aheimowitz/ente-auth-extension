@@ -3,9 +3,13 @@
  */
 import { useEffect, useLayoutEffect, useState } from "react";
 import { sendMessage } from "@shared/browser";
-import type { ExtensionSettings, ThemeMode } from "@shared/types";
+import { ACCENT_COLORS, resolveAccentColor } from "@shared/accent";
+import type { AccentTheme, ExtensionSettings, ThemeMode } from "@shared/types";
+
+export { ACCENT_COLORS, resolveAccentColor };
 
 type ResolvedTheme = "light" | "dark";
+
 
 /**
  * Get the current system color scheme preference.
@@ -26,21 +30,41 @@ const applyTheme = (theme: ResolvedTheme): void => {
 };
 
 /**
+ * Apply accent class to document. A custom accent sets --accent inline;
+ * theme.css derives the hover and pin colors from it.
+ */
+export const applyAccent = (accent: AccentTheme, customColor: string): void => {
+    const root = document.documentElement;
+    root.classList.remove("accent-duckey", "accent-ente", "accent-custom");
+    root.classList.add(`accent-${accent}`);
+    if (accent === "custom") {
+        root.style.setProperty("--accent", customColor);
+    } else {
+        root.style.removeProperty("--accent");
+    }
+};
+
+/**
  * Hook to manage and apply theme settings.
  * - Loads theme from settings
  * - Detects system preference when mode is "system"
  * - Applies theme class to document
  * - Listens for system preference changes
+ * - Applies the accent class; `forceAccent` overrides the user's setting
  */
-export const useTheme = (): {
+export const useTheme = (forceAccent?: AccentTheme): {
     theme: ThemeMode;
     resolvedTheme: ResolvedTheme;
+    accent: AccentTheme;
 } => {
     // Initialize system preference synchronously to avoid flash
     const [systemPreference, setSystemPreference] = useState<ResolvedTheme>(
         getSystemPreference
     );
     const [theme, setTheme] = useState<ThemeMode>("system");
+    const [accentSetting, setAccentSetting] = useState<AccentTheme>("duckey");
+    const [customColor, setCustomColor] = useState("#2F6FDE");
+    const accent = forceAccent ?? accentSetting;
     const [settingsLoaded, setSettingsLoaded] = useState(false);
 
     // Resolve the actual theme to apply
@@ -53,6 +77,10 @@ export const useTheme = (): {
         applyTheme(resolvedTheme);
     }, [resolvedTheme]);
 
+    useLayoutEffect(() => {
+        applyAccent(accent, customColor);
+    }, [accent, customColor]);
+
     // Load theme from settings
     useEffect(() => {
         const loadTheme = async () => {
@@ -64,6 +92,8 @@ export const useTheme = (): {
 
                 if (response.success && response.data) {
                     setTheme(response.data.theme);
+                    setAccentSetting(response.data.accentTheme ?? "duckey");
+                    setCustomColor(response.data.accentCustomColor ?? "#2F6FDE");
                 }
             } catch (e) {
                 // Silently ignore connection errors (service worker waking up)
@@ -95,7 +125,7 @@ export const useTheme = (): {
         };
     }, []);
 
-    return { theme, resolvedTheme };
+    return { theme, resolvedTheme, accent };
 };
 
 /**
@@ -118,5 +148,24 @@ export const getResolvedTheme = async (): Promise<ResolvedTheme> => {
         return themeSetting;
     } catch {
         return "dark";
+    }
+};
+
+/**
+ * Get the accent color as a hex value (for content scripts).
+ */
+export const getResolvedAccentColor = async (): Promise<string> => {
+    try {
+        const response = await sendMessage<{
+            success: boolean;
+            data?: ExtensionSettings;
+        }>({ type: "GET_SETTINGS" });
+
+        return resolveAccentColor(
+            response.data?.accentTheme ?? "duckey",
+            response.data?.accentCustomColor ?? "#2F6FDE"
+        );
+    } catch {
+        return ACCENT_COLORS.duckey;
     }
 };

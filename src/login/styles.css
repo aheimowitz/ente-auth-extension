@@ -23,6 +23,7 @@ body {
 
 .login-container {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     min-height: 100vh;
@@ -92,7 +93,7 @@ body {
 }
 
 .login-input:focus {
-    border-color: var(--accent-purple);
+    border-color: var(--accent);
 }
 
 .login-input:disabled {
@@ -109,7 +110,7 @@ body {
 .login-button {
     width: 100%;
     padding: 14px 24px;
-    background-color: var(--accent-purple);
+    background-color: var(--accent);
     border: none;
     border-radius: 8px;
     color: #fff;
@@ -125,7 +126,7 @@ body {
 }
 
 .login-button:hover:not(:disabled) {
-    background-color: var(--accent-purple-hover);
+    background-color: var(--accent-hover);
 }
 
 .login-button:disabled {
@@ -147,7 +148,7 @@ body {
 .login-link {
     background: none;
     border: none;
-    color: var(--accent-purple);
+    color: var(--accent);
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
@@ -205,7 +206,7 @@ body {
 .passkey-choice-button {
     width: 100%;
     padding: 14px 24px;
-    background-color: var(--accent-purple);
+    background-color: var(--accent);
     border: none;
     border-radius: 8px;
     color: #fff;
@@ -222,7 +223,7 @@ body {
 }
 
 .passkey-choice-button:hover {
-    background-color: var(--accent-purple-hover);
+    background-color: var(--accent-hover);
 }
 
 .passkey-choice-button.secondary {
@@ -248,7 +249,7 @@ body {
     width: 32px;
     height: 32px;
     border: 3px solid var(--stroke);
-    border-top-color: var(--accent-purple);
+    border-top-color: var(--accent);
 }
 
 .passkey-status-text {
@@ -278,4 +279,22 @@ body {
 
 .passkey-action-button.secondary:hover:not(:disabled) {
     background-color: var(--fill-muted);
+}
+
+.login-footnote {
+    max-width: 400px;
+    margin-top: 16px;
+    font-size: 12px;
+    color: var(--text-faint);
+    text-align: center;
+}
+
+.login-footnote svg {
+    vertical-align: -1px;
+    margin-right: 5px;
+}
+
+.login-brand {
+    margin-top: 6px;
+    opacity: 0.7;
 }

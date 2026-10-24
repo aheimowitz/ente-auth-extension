@@ -15,6 +15,8 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let hasShownPopup = false;
 let lastUrl = window.location.href;
 let validationInterval: ReturnType<typeof setInterval> | null = null;
+// Incremented per render so a slow, outdated state fetch can't overwrite a newer one
+let renderSeq = 0;
 
 /**
  * Reset state and hide popup when navigation occurs.
@@ -75,6 +77,7 @@ async function sendMessageWithRetry<T>(
  */
 const renderIconForCurrentDetection = async (): Promise<void> => {
     if (!currentDetection) return;
+    const seq = ++renderSeq;
 
     const domain = window.location.hostname;
 
@@ -99,6 +102,8 @@ const renderIconForCurrentDetection = async (): Promise<void> => {
             domain,
         });
 
+        if (seq !== renderSeq || !currentDetection) return;
+
         const matches = response?.data?.matches || [];
         const timeOffset = response?.data?.timeOffset || 0;
         const authState = response?.data?.authState;
@@ -113,9 +118,9 @@ const renderIconForCurrentDetection = async (): Promise<void> => {
             : currentDetection.element;
         const placement: "inside" | "outside" = isSplit ? "outside" : "inside";
 
-        showPopup(matches, timeOffset, (otp: string) => {
+        showPopup(matches, timeOffset, (otp: string, userInitiated = true) => {
             if (currentDetection) {
-                fillCode(currentDetection, otp);
+                fillCode(currentDetection, otp, true, userInitiated);
             }
         }, anchorElement, autoFillSingleMatch, authState, placement);
     } catch (error) {
@@ -155,13 +160,18 @@ const refreshIcon = (): void => {
 };
 
 /**
- * Debounced check for MFA fields.
+ * Debounced check for MFA fields. Pass immediate=true for direct user
+ * interactions (focus) where the debounce delay would be felt as lag.
  */
-const debouncedCheck = (): void => {
+const debouncedCheck = (immediate = false): void => {
     if (debounceTimer) {
         clearTimeout(debounceTimer);
     }
-    debounceTimer = setTimeout(checkForMFAFields, 500);
+    if (immediate) {
+        void checkForMFAFields();
+    } else {
+        debounceTimer = setTimeout(checkForMFAFields, 200);
+    }
 };
 
 /**
@@ -176,6 +186,9 @@ const handleMessage = (
     if (msg.type === "FILL_OTP" && msg.code && currentDetection) {
         fillCode(currentDetection, msg.code);
         sendResponse({ success: true });
+    } else if (msg.type === "AUTH_STATE_CHANGED") {
+        // Sent by the background on login / unlock / lock / logout (issue #22)
+        refreshIcon();
     }
     return false;
 };
@@ -231,6 +244,11 @@ const init = (): void => {
                             node.querySelector?.("input"))
                 );
             }
+            // Attribute changes on inputs (e.g. type flipping from hidden to
+            // text, or an input being un-hidden) can reveal MFA fields.
+            if (mutation.type === "attributes" && mutation.target instanceof HTMLInputElement) {
+                return true;
+            }
             return false;
         });
 
@@ -242,18 +260,25 @@ const init = (): void => {
     observer.observe(document.body, {
         childList: true,
         subtree: true,
+        attributes: true,
+        attributeFilter: ["type", "style", "class", "hidden"],
     });
 
-    // Also check on focus events (for SPAs that show forms dynamically)
+    // Also check on focus events (for SPAs that show forms dynamically).
+    // Immediate check (no debounce) since this is a direct user interaction.
     document.addEventListener(
         "focusin",
         (e) => {
             if (e.target instanceof HTMLInputElement && !hasShownPopup) {
-                debouncedCheck();
+                debouncedCheck(true);
             }
         },
         true
     );
+
+    // Re-check auth state when the user comes back to this tab, e.g. after
+    // logging in from the login tab or toolbar popup
+    window.addEventListener("focus", refreshIcon);
 
     // Clean up popup when navigating away
     window.addEventListener("beforeunload", () => {

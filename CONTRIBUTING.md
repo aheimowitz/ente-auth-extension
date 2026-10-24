@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in contributing to the Ente Auth Browser Extension!
+Thanks for your interest in contributing to Duckey!
 
 ## Getting Started
 
