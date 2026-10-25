@@ -163,6 +163,7 @@ export type ExtensionMessage =
     | { type: "UNLOCK"; password: string }
     | { type: "UNLOCK_WITH_PIN"; pin: string }
     | { type: "SET_PIN"; pin: string; lockOnRestart?: boolean }
+    | { type: "SET_PIN_LOCK_ON_RESTART"; lockOnRestart: boolean }
     | { type: "REMOVE_PIN" }
     | { type: "GET_AUTH_STATE" }
     | { type: "GET_SETTINGS" }
@@ -192,6 +193,7 @@ export interface AuthState {
     email?: string;
     hasPIN: boolean;
     pinRequiresPassword?: boolean;
+    pinLockOnRestart?: boolean;
 }
 
 /**

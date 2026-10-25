@@ -282,17 +282,44 @@ export const pinStorage = {
             await Promise.all(writes);
         } else {
             // Standard mode: persist PIN-encrypted master key to disk
-            await Promise.all([
+            const writes: Promise<void>[] = [
                 localStore.set(KEYS.PIN_ENCRYPTED_DATA, encryptedData),
                 localStore.set(KEYS.PIN_NONCE, nonce),
                 localStore.set(KEYS.PIN_SALT, salt),
                 localStore.remove(KEYS.PIN_LOCK_ON_RESTART),
-                localStore.remove(KEYS.PIN_ENCRYPTED_WRAP),
-                localStore.remove(KEYS.PIN_WRAP_NONCE),
                 localStore.remove(KEYS.PIN_FAILED_ATTEMPTS),
-                sessionStore.remove(KEYS.PIN_ENCRYPTED_DATA),
-                sessionStore.remove(KEYS.PIN_NONCE),
-                sessionStore.remove(KEYS.PIN_SALT),
+                sessionStore.set(KEYS.PIN_ENCRYPTED_DATA, encryptedData),
+                sessionStore.set(KEYS.PIN_NONCE, nonce),
+                sessionStore.set(KEYS.PIN_SALT, salt),
+            ];
+            if (wrappedPin) {
+                writes.push(
+                    localStore.set(KEYS.PIN_ENCRYPTED_WRAP, wrappedPin.encryptedData),
+                    localStore.set(KEYS.PIN_WRAP_NONCE, wrappedPin.nonce)
+                );
+            }
+            await Promise.all(writes);
+        }
+    },
+
+    async setLockOnRestart(lockOnRestart: boolean): Promise<void> {
+        const pinData = await this.getPinData();
+        if (!pinData) return;
+
+        if (lockOnRestart) {
+            await this.setSessionPin(pinData.encryptedData, pinData.nonce, pinData.salt);
+            await Promise.all([
+                localStore.set(KEYS.PIN_LOCK_ON_RESTART, true),
+                localStore.set(KEYS.PIN_SALT, pinData.salt),
+                localStore.remove(KEYS.PIN_ENCRYPTED_DATA),
+                localStore.remove(KEYS.PIN_NONCE),
+            ]);
+        } else {
+            await Promise.all([
+                localStore.set(KEYS.PIN_ENCRYPTED_DATA, pinData.encryptedData),
+                localStore.set(KEYS.PIN_NONCE, pinData.nonce),
+                localStore.set(KEYS.PIN_SALT, pinData.salt),
+                localStore.remove(KEYS.PIN_LOCK_ON_RESTART),
             ]);
         }
     },

@@ -30,6 +30,7 @@ export const getAuthState = async (): Promise<AuthState> => {
         email,
         hasPIN: hasPINValue,
         pinRequiresPassword,
+        pinLockOnRestart: isLockOnRestart,
     };
 };
 
@@ -173,11 +174,29 @@ export const setPin = async (pin: string, lockOnRestart: boolean = false): Promi
     const pinKey = await deriveKey(pin, salt, PIN_OPS_LIMIT, PIN_MEM_LIMIT);
     const { encryptedData, nonce } = await encryptBox(masterKey, pinKey);
 
+    const wrappedPin = await encryptBox(await stringToB64(pin), masterKey);
+
     if (lockOnRestart) {
-        const wrappedPin = await encryptBox(await stringToB64(pin), masterKey);
         await pinStorage.setPinData(encryptedData, nonce, salt, true, wrappedPin);
+        await authStorage.setMasterKey(masterKey);
     } else {
-        await pinStorage.setPinData(encryptedData, nonce, salt, false);
+        await pinStorage.setPinData(encryptedData, nonce, salt, false, wrappedPin);
+    }
+};
+
+/**
+ * Toggle the require-password-on-restart setting without changing the PIN.
+ */
+export const setPinLockOnRestart = async (lockOnRestart: boolean): Promise<void> => {
+    const masterKey = await authStorage.getMasterKey();
+    if (!masterKey) throw new Error("Vault must be unlocked");
+
+    const hasPin = await pinStorage.hasPIN();
+    if (!hasPin) throw new Error("No PIN configured");
+
+    await pinStorage.setLockOnRestart(lockOnRestart);
+    if (lockOnRestart) {
+        await authStorage.setMasterKey(masterKey);
     }
 };
 

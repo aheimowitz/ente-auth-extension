@@ -12,7 +12,7 @@ import type {
     ExtensionMessage,
     ExtensionResponse,
 } from "@shared/types";
-import { getAuthState, login, lock, logout, unlock, setPin, removePin, unlockWithPin } from "./auth";
+import { getAuthState, login, lock, logout, unlock, setPin, removePin, unlockWithPin, setPinLockOnRestart } from "./auth";
 import { settingsStorage, authStorage, customMappingsStorage } from "./storage";
 import { getCodes, getTimeOffset, syncCodes, createCode, updateCode, deleteCode } from "./sync";
 import { scanQRFromPage } from "./qr-scanner";
@@ -417,6 +417,15 @@ const handleMessage = async (
                 return { success: true };
             } catch (e) {
                 return { success: false, error: e instanceof Error ? e.message : "Failed to set PIN" };
+            }
+        }
+
+        case "SET_PIN_LOCK_ON_RESTART": {
+            try {
+                await setPinLockOnRestart(message.lockOnRestart);
+                return { success: true };
+            } catch (e) {
+                return { success: false, error: e instanceof Error ? e.message : "Failed to update PIN setting" };
             }
         }
 
