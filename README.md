@@ -27,7 +27,7 @@ Duckey was previously called **Ente Auth Extension**. It's the same project, ren
 ### From the browser stores (recommended)
 
 - **Chrome**: Chrome Web Store (link coming soon)
-- **Edge**: [Microsoft Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/duckey-2fa-autofill-for-/ohccakbkllnfhpjlbjnbehnajdkopocl)
+- **Edge**: [Microsoft Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/duckey/ohccakbkllnfhpjlbjnbehnajdkopocl)
 - **Firefox**: Firefox Add-ons (link coming soon)
 
 Only install Duckey from these listings or from this repository's releases. Copies published elsewhere aren't from this project.
