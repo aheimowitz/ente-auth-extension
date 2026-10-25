@@ -49,8 +49,15 @@ export const localStore = {
 };
 
 /**
+ * In-memory fallback for environments without browser.storage.session (e.g. Firefox MV2).
+ * Prevents session secrets (master key, TOTP codes cache) from being persisted to disk in storage.local.
+ */
+const inMemorySessionStore = new Map<string, unknown>();
+
+/**
  * Session storage operations (cleared on browser close).
- * Falls back to local storage if session storage is not available.
+ * Uses browser.storage.session when available (Chrome MV3).
+ * Falls back to in-memory storage when browser.storage.session is undefined (Firefox MV2).
  */
 export const sessionStore = {
     async get<T>(key: string): Promise<T | undefined> {
@@ -59,15 +66,15 @@ export const sessionStore = {
             const result = await browser.storage.session.get(key);
             return result[key] as T | undefined;
         }
-        // Fallback to local storage for Firefox MV2
-        return localStore.get<T>(`session_${key}`);
+        // In-memory fallback for Firefox MV2
+        return inMemorySessionStore.get(key) as T | undefined;
     },
 
     async set(key: string, value: unknown): Promise<void> {
         if (browser.storage.session) {
             await browser.storage.session.set({ [key]: value });
         } else {
-            await localStore.set(`session_${key}`, value);
+            inMemorySessionStore.set(key, value);
         }
     },
 
@@ -75,22 +82,23 @@ export const sessionStore = {
         if (browser.storage.session) {
             await browser.storage.session.remove(key);
         } else {
-            await localStore.remove(`session_${key}`);
+            inMemorySessionStore.delete(key);
         }
     },
 
     async clear(): Promise<void> {
         if (browser.storage.session) {
             await browser.storage.session.clear();
-        } else {
-            // Clear session-prefixed items from local storage
-            const items = await browser.storage.local.get(null);
-            const sessionKeys = Object.keys(items).filter((k) =>
-                k.startsWith("session_")
-            );
-            if (sessionKeys.length > 0) {
-                await browser.storage.local.remove(sessionKeys);
-            }
+        }
+        inMemorySessionStore.clear();
+
+        // Clear session-prefixed items from local storage to remove legacy remnants
+        const items = await browser.storage.local.get(null);
+        const sessionKeys = Object.keys(items).filter((k) =>
+            k.startsWith("session_")
+        );
+        if (sessionKeys.length > 0) {
+            await browser.storage.local.remove(sessionKeys);
         }
     },
 };
@@ -211,10 +219,10 @@ export const settingsStorage = {
         const showAutofillIcon = stored?.showAutofillIcon ?? legacyAutofill ?? true;
         const autoFillSingleMatch = stored?.autoFillSingleMatch ?? legacyAutofill ?? true;
 
-        // Migrate from old lockOnBrowserClose boolean to vaultTimeout
-        let vaultTimeout: VaultTimeout = stored?.vaultTimeout ?? "never";
-        if (!stored?.vaultTimeout && stored?.lockOnBrowserClose) {
-            vaultTimeout = "onRestart";
+        // Migrate from old lockOnBrowserClose boolean to vaultTimeout (default: "onRestart")
+        let vaultTimeout: VaultTimeout = stored?.vaultTimeout ?? "onRestart";
+        if (!stored?.vaultTimeout && stored?.lockOnBrowserClose === false) {
+            vaultTimeout = "never";
         }
 
         return {

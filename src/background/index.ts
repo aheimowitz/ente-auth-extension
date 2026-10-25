@@ -86,6 +86,18 @@ onIdleStateChange((state) => {
 const init = async () => {
     console.log("Duckey background script initialized");
 
+    // Defensively scan and remove legacy session_* keys from storage.local to purge remnants from previous versions
+    try {
+        const items = await browser.storage.local.get(null);
+        const legacySessionKeys = Object.keys(items).filter((k) => k.startsWith("session_"));
+        if (legacySessionKeys.length > 0) {
+            await browser.storage.local.remove(legacySessionKeys);
+            console.log("Purged legacy session keys from storage.local:", legacySessionKeys);
+        }
+    } catch (e) {
+        console.warn("Failed to purge legacy session keys from storage.local:", e);
+    }
+
     // Set up periodic sync alarm and configure API URL
     const settings = await settingsStorage.getSettings();
     await createAlarm(SYNC_ALARM_NAME, settings.syncInterval);

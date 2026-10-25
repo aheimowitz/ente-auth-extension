@@ -112,7 +112,7 @@ export const defaultSettings: ExtensionSettings = {
     theme: "system",
     accentTheme: "duckey",
     accentCustomColor: "#2F6FDE",
-    vaultTimeout: "never",
+    vaultTimeout: "onRestart",
     serverUrl: "",
     accountsUrl: "",
     sortOrder: "issuer",
