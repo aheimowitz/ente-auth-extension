@@ -48,8 +48,8 @@ const incrementSubmitAttempts = (): void => {
 
 /**
  * Fill an MFA code into the detected field(s) and optionally submit.
- * Only submits if autoSubmit is explicitly enabled, and non-user-initiated fills
- * are capped at MAX_AUTO_SUBMIT_ATTEMPTS.
+ * Only submits if autoSubmit is explicitly enabled.
+ * Non-user-initiated fills are capped at MAX_AUTO_SUBMIT_ATTEMPTS.
  */
 export const fillCode = (
     detection: MFAFieldDetection,
