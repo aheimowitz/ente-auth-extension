@@ -107,7 +107,7 @@ const renderIconForCurrentDetection = async (): Promise<void> => {
         const matches = response?.data?.matches || [];
         const timeOffset = response?.data?.timeOffset || 0;
         const authState = response?.data?.authState;
-        const autoFillSingleMatch = settings?.autoFillSingleMatch ?? true;
+        const autoFillSingleMatch = settings?.autoFillSingleMatch ?? false;
 
         // For split-input detections (one digit per box), anchor the icon to
         // the LAST input and place it outside since the individual boxes are
@@ -120,7 +120,7 @@ const renderIconForCurrentDetection = async (): Promise<void> => {
 
         showPopup(matches, timeOffset, (otp: string, userInitiated = true) => {
             if (currentDetection) {
-                fillCode(currentDetection, otp, true, userInitiated);
+                fillCode(currentDetection, otp, userInitiated, userInitiated);
             }
         }, anchorElement, autoFillSingleMatch, authState, placement);
     } catch (error) {

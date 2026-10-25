@@ -33,53 +33,29 @@ export const getBuiltInMappings = (): Record<string, string[]> => {
 };
 
 /**
- * Calculate Levenshtein distance between two strings.
+ * Common two-part ccTLD second-level domains (e.g. .co.uk, .com.au, .edu.sg).
  */
-const levenshteinDistance = (a: string, b: string): number => {
-    const matrix: number[][] = [];
-
-    for (let i = 0; i <= b.length; i++) {
-        matrix[i] = [i];
-    }
-
-    for (let j = 0; j <= a.length; j++) {
-        matrix[0]![j] = j;
-    }
-
-    for (let i = 1; i <= b.length; i++) {
-        for (let j = 1; j <= a.length; j++) {
-            if (b.charAt(i - 1) === a.charAt(j - 1)) {
-                matrix[i]![j] = matrix[i - 1]![j - 1]!;
-            } else {
-                matrix[i]![j] = Math.min(
-                    matrix[i - 1]![j - 1]! + 1,
-                    matrix[i]![j - 1]! + 1,
-                    matrix[i - 1]![j]! + 1
-                );
-            }
-        }
-    }
-
-    return matrix[b.length]![a.length]!;
-};
-
-/**
- * Calculate similarity between two strings (0-1).
- */
-const similarity = (a: string, b: string): number => {
-    const maxLen = Math.max(a.length, b.length);
-    if (maxLen === 0) return 1;
-    const distance = levenshteinDistance(a.toLowerCase(), b.toLowerCase());
-    return 1 - distance / maxLen;
-};
+const SECOND_LEVEL_DOMAINS = new Set([
+    "co", "com", "org", "net", "edu", "gov", "ac", "ne", "or", "go", "gen", "firm", "ind", "ltd", "me", "asso"
+]);
 
 /**
  * Extract the base domain from a hostname.
  * e.g., "accounts.google.com" -> "google.com"
+ *       "sub.evil.co.uk" -> "evil.co.uk"
  */
 const getBaseDomain = (hostname: string): string => {
     const parts = hostname.split(".");
     if (parts.length <= 2) return hostname;
+
+    const tld = parts[parts.length - 1]!;
+    const sld = parts[parts.length - 2]!;
+
+    // If ccTLD (2 chars) and known second-level domain (e.g. co.uk, com.au)
+    if (tld.length === 2 && SECOND_LEVEL_DOMAINS.has(sld)) {
+        return parts.length >= 3 ? parts.slice(-3).join(".") : hostname;
+    }
+
     return parts.slice(-2).join(".");
 };
 
@@ -101,6 +77,11 @@ const domainMatches = (hostname: string, domain: string): boolean => {
 };
 
 /**
+ * Strict minimum confidence threshold required for any autofill suggestion.
+ */
+export const MIN_MATCH_CONFIDENCE = 0.8;
+
+/**
  * Match codes to a domain.
  *
  * @param codes The list of codes to search.
@@ -113,6 +94,8 @@ export const matchCodesToDomain = (
 ): DomainMatch[] => {
     const hostname = domain.toLowerCase();
     const baseDomain = getBaseDomain(hostname);
+    const domainName = baseDomain.split(".")[0]!;
+    const normalizedDomainName = normalizeIssuer(domainName);
     const matches: DomainMatch[] = [];
 
     for (const code of codes) {
@@ -140,9 +123,15 @@ export const matchCodesToDomain = (
         }
 
         // 1. Exact match (confidence: 1.0)
-        if (confidence === 0 && (issuer === hostname || issuer === baseDomain)) {
-            confidence = 1.0;
+        if (confidence === 0) {
+            if (issuer === hostname || issuer === baseDomain) {
+                confidence = 1.0;
+            } else if (domainMatches(hostname, issuer)) {
+                // If issuer itself is a domain (e.g., "example.com") and hostname is a subdomain
+                confidence = 0.95;
+            }
         }
+
         // 2. Check known mappings
         if (confidence === 0) {
             // First try exact match on normalized issuer
@@ -173,39 +162,29 @@ export const matchCodesToDomain = (
                         break;
                     }
                 }
+
+                // If an issuer has known domains in KNOWN_DOMAIN_MAPPINGS, and the page
+                // hostname does not match any of them, DO NOT fall through to substring
+                // or fuzzy matching!
+                if (confidence === 0) {
+                    continue;
+                }
             }
         }
 
-        // 3. Subdomain/partial match (confidence: 0.8)
-        // Only apply partial matching if issuer is at least 4 chars to avoid false positives
-        if (confidence === 0 && normalizedIssuer.length >= 4) {
-            const domainName = baseDomain.split(".")[0]!;
-
-            // Check various partial match scenarios:
-            // - hostname contains the issuer (e.g., "snowflakecomputing.com" contains "snowflake")
-            // - issuer contains the domain name (e.g., issuer "GitHub Enterprise" contains "github")
-            // - domain name starts with issuer (e.g., "snowflakecomputing" starts with "snowflake")
-            // - issuer starts with domain name (e.g., "githubenterprise" starts with "github")
-            if (
-                hostname.includes(normalizedIssuer) ||
-                normalizedIssuer.includes(domainName) ||
-                domainName.startsWith(normalizedIssuer) ||
-                normalizedIssuer.startsWith(domainName)
-            ) {
-                confidence = 0.8;
+        // 3. Registrable domain match (confidence: 0.85)
+        // Matches if:
+        // - Hostname matches the base domain or is a subdomain of it,
+        //   and the normalized issuer exactly matches the normalized registrable domain name
+        //   (e.g., issuer "Vaultwarden" matches "vaultwarden.org" or "vault.vaultwarden.org")
+        if (confidence === 0 && normalizedIssuer.length >= 3) {
+            if (normalizedIssuer === normalizedDomainName) {
+                confidence = 0.85;
             }
         }
 
-        // 4. Fuzzy match with Levenshtein (confidence based on similarity)
-        if (confidence === 0) {
-            const baseDomainName = baseDomain.split(".")[0]!;
-            const sim = similarity(normalizedIssuer, baseDomainName);
-            if (sim > 0.7) {
-                confidence = sim * 0.7; // Scale to max 0.49
-            }
-        }
-
-        if (confidence > 0) {
+        // Require a strict minimum confidence threshold (>= 0.8) for any autofill suggestion
+        if (confidence >= MIN_MATCH_CONFIDENCE) {
             // Boost pinned codes slightly within their tier
             const pinnedBoost = code.codeDisplay?.pinned ? 0.001 : 0;
             matches.push({ code, confidence: confidence + pinnedBoost });
