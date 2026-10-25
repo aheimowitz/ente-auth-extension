@@ -348,13 +348,13 @@ export const App: React.FC = () => {
                         </label>
                     </div>
 
-                    <div className={`setting-item ${!settings.autoFillSingleMatch ? "disabled" : ""}`}>
+                    <div className="setting-item">
                         <div className="setting-info">
-                            <label>Auto-submit single match</label>
+                            <label>Auto-submit forms</label>
                             <p>
-                                Automatically submit the form after filling when only one code matches.
+                                Automatically submit the form after filling a code (on single match or when selecting a code).
                             </p>
-                            {settings.autoSubmitSingleMatch && settings.autoFillSingleMatch && (
+                            {settings.autoSubmit && (
                                 <p style={{ color: "#e6a23c", fontSize: "12px", marginTop: "4px" }}>
                                     ⚠️ Submits the form automatically without manual confirmation.
                                 </p>
@@ -363,10 +363,9 @@ export const App: React.FC = () => {
                         <label className="toggle">
                             <input
                                 type="checkbox"
-                                disabled={!settings.autoFillSingleMatch}
-                                checked={settings.autoSubmitSingleMatch && settings.autoFillSingleMatch}
+                                checked={settings.autoSubmit}
                                 onChange={() =>
-                                    handleToggle("autoSubmitSingleMatch")
+                                    handleToggle("autoSubmit")
                                 }
                             />
                             <span className="toggle-slider"></span>

@@ -48,13 +48,13 @@ const incrementSubmitAttempts = (): void => {
 
 /**
  * Fill an MFA code into the detected field(s) and optionally submit.
- * User-initiated fills always submit; automatic fills (single-match autofill)
- * only submit if autoSubmit is explicitly enabled, and are capped at MAX_AUTO_SUBMIT_ATTEMPTS.
+ * Only submits if autoSubmit is explicitly enabled, and non-user-initiated fills
+ * are capped at MAX_AUTO_SUBMIT_ATTEMPTS.
  */
 export const fillCode = (
     detection: MFAFieldDetection,
     code: string,
-    autoSubmit = true,
+    autoSubmit = false,
     userInitiated = true
 ): void => {
     if (detection.type === "split" && detection.splitInputs) {
@@ -63,7 +63,7 @@ export const fillCode = (
         fillSingleInput(detection.element, code);
     }
 
-    // Auto-submit after a short delay to let frameworks process the input
+    // Auto-submit after a short delay if autoSubmit is enabled
     if (autoSubmit) {
         if (userInitiated || getSubmitAttempts() < MAX_AUTO_SUBMIT_ATTEMPTS) {
             incrementSubmitAttempts();
