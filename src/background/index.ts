@@ -203,6 +203,46 @@ const handleMessage = async (
             }
         }
 
+        case "OPEN_POPUP": {
+            try {
+                const windowId = sender.tab?.windowId;
+                // In Chrome MV3: chrome.action.openPopup
+                if (typeof chrome !== "undefined" && chrome.action && typeof chrome.action.openPopup === "function") {
+                    if (windowId !== undefined) {
+                        await chrome.action.openPopup({ windowId });
+                    } else {
+                        await chrome.action.openPopup();
+                    }
+                    return { success: true };
+                }
+                // In Firefox MV2: browser.browserAction.openPopup
+                if (browser.browserAction && typeof (browser.browserAction as { openPopup?: (options?: { windowId?: number }) => Promise<void> }).openPopup === "function") {
+                    if (windowId !== undefined) {
+                        await (browser.browserAction as { openPopup: (options?: { windowId?: number }) => Promise<void> }).openPopup({ windowId });
+                    } else {
+                        await (browser.browserAction as { openPopup: () => Promise<void> }).openPopup();
+                    }
+                    return { success: true };
+                }
+            } catch (e) {
+                console.warn("[Duckey] openPopup failed, falling back to popup tab:", e);
+            }
+
+            // Fallback: If openPopup() fails, open popup/index.html in a tab.
+            // This immediately renders the Unlock view (PIN or password prompt only) without asking for email!
+            try {
+                await browser.tabs.create({
+                    url: browser.runtime.getURL("popup/index.html"),
+                });
+                return { success: true };
+            } catch (e) {
+                return {
+                    success: false,
+                    error: e instanceof Error ? e.message : "Failed to open popup",
+                };
+            }
+        }
+
         case "UNLOCK": {
             try {
                 const success = await unlock(message.password);

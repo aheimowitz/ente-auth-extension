@@ -651,7 +651,11 @@ const AuthPromptDropdown: React.FC<AuthPromptDropdownProps> = ({
     }, [onClose]);
 
     const handleAction = async () => {
-        await sendMessage({ type: "OPEN_LOGIN_PAGE" });
+        if (needsLogin) {
+            await sendMessage({ type: "OPEN_LOGIN_PAGE" });
+        } else {
+            await sendMessage({ type: "OPEN_POPUP" });
+        }
         onClose();
     };
 

@@ -158,6 +158,7 @@ export type ExtensionMessage =
     | { type: "LOGIN"; token: string; keyAttributes: KeyAttributes }
     | { type: "LOGIN_COMPLETE"; token: string; email: string; keyAttributes: KeyAttributes; masterKey: string }
     | { type: "OPEN_LOGIN_PAGE" }
+    | { type: "OPEN_POPUP" }
     | { type: "LOGOUT" }
     | { type: "LOCK" }
     | { type: "UNLOCK"; password: string }
