@@ -11,7 +11,7 @@ All the images are in [`store-listing/`](store-listing/). Text you can paste is 
 | Store | Status (2026-10-24) | Listing |
 | --- | --- | --- |
 | Chrome Web Store | 1.0.0 submitted; in-depth review (all-sites access) | Link once approved |
-| Microsoft Edge Add-ons | 1.0.0 submitted | Link once approved |
+| Microsoft Edge Add-ons | **1.0.0 published** | [Edge listing](https://microsoftedge.microsoft.com/addons/detail/duckey/ohccakbkllnfhpjlbjnbehnajdkopocl) |
 | Firefox Add-ons | 1.0.0 submitted as a listed version, with source | `https://addons.mozilla.org/firefox/addon/duckey/` once approved |
 
 Steps 0–4 below are done. What's left: get the CI keys (steps 2 and 3), then step 5 once all three are approved, then step 7.
