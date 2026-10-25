@@ -63,7 +63,7 @@ export const fillCode = (
         fillSingleInput(detection.element, code);
     }
 
-    // Auto-submit after a short delay if autoSubmit is enabled
+    // Auto-submit if autoSubmit is enabled, after a short delay to let frameworks process the input
     if (autoSubmit) {
         if (userInitiated || getSubmitAttempts() < MAX_AUTO_SUBMIT_ATTEMPTS) {
             incrementSubmitAttempts();
