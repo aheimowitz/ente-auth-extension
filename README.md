@@ -28,7 +28,7 @@ Duckey was previously called **Ente Auth Extension**. It's the same project, ren
 
 - **Chrome**: Chrome Web Store (link coming soon)
 - **Edge**: [Microsoft Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/duckey/ohccakbkllnfhpjlbjnbehnajdkopocl)
-- **Firefox**: Firefox Add-ons (link coming soon)
+- **Firefox**: Firefox Add-ons (in review). Until it's live, use the signed `.xpi` from the releases (below).
 
 Only install Duckey from these listings or from this repository's releases. Copies published elsewhere aren't from this project.
 
@@ -38,7 +38,7 @@ If you installed an earlier version unpacked or from a GitHub release, remove th
 
 1. Download the latest release for your browser from the [Releases page](../../releases):
    - **Chrome / Edge**: `duckey-chrome-x.x.x.zip`
-   - **Firefox**: `duckey-firefox-x.x.x.zip`
+   - **Firefox**: `duckey-firefox-x.x.x.xpi` (signed by Mozilla; 1.0.1 and later)
 2. Install it:
 
    **Chrome / Edge:**
@@ -49,10 +49,10 @@ If you installed an earlier version unpacked or from a GitHub release, remove th
    5. Select the extracted folder
 
    **Firefox:**
-   1. Open `about:debugging#/runtime/this-firefox`
-   2. Click "Load Temporary Add-on" and pick the zip file
+   1. Open the `.xpi` file in Firefox, or drag it onto a Firefox window
+   2. Click "Add" when Firefox asks
 
-   > Temporary add-ons are removed when Firefox closes. For a permanent install, use Firefox Add-ons.
+   > The `.xpi` is signed by Mozilla, so it stays installed and gets updates from Firefox Add-ons once the listing is live. The `duckey-firefox-x.x.x.zip` is unsigned: Firefox only loads it as a temporary add-on (`about:debugging`) and removes it on restart.
 
 ### From source
 
