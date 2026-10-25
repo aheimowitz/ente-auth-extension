@@ -184,7 +184,7 @@ const fetchAuthenticatorEntities = async (
         );
 
         if (timestamp) {
-            timeOffset = Date.now() - Math.floor(timestamp / 1e3);
+            timeOffset = Math.floor(timestamp / 1e3) - Date.now();
         }
 
         if (diff.length === 0) break;
