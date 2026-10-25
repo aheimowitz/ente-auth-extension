@@ -151,9 +151,12 @@ export const authStorage = {
     },
 
     async setMasterKey(key: string): Promise<void> {
-        const settings = await settingsStorage.getSettings();
-        if (settings.vaultTimeout !== "never") {
-            // Any timeout setting: keep the live key in session storage so a
+        const [settings, isLockOnRestart] = await Promise.all([
+            settingsStorage.getSettings(),
+            pinStorage.isLockOnRestart(),
+        ]);
+        if (settings.vaultTimeout !== "never" || isLockOnRestart) {
+            // Any timeout setting or lockOnRestart active: keep the live key in session storage so a
             // browser restart always requires re-unlock (via PIN or password)
             await sessionStore.set(KEYS.MASTER_KEY_SESSION, key);
             await localStore.remove(KEYS.MASTER_KEY);
