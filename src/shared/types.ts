@@ -84,6 +84,8 @@ export interface ExtensionSettings {
     showAutofillIcon: boolean;
     /** Automatically fill when single match found. Default: false */
     autoFillSingleMatch: boolean;
+    /** Automatically submit form after autofill when single match found. Default: false */
+    autoSubmitSingleMatch: boolean;
     /** Sync interval in minutes. Default: 5 */
     syncInterval: number;
     /** Theme mode. Default: "system" */
@@ -108,6 +110,7 @@ export interface ExtensionSettings {
 export const defaultSettings: ExtensionSettings = {
     showAutofillIcon: true,
     autoFillSingleMatch: false,
+    autoSubmitSingleMatch: false,
     syncInterval: 5,
     theme: "system",
     accentTheme: "duckey",
