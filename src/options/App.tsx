@@ -445,10 +445,13 @@ export const App: React.FC = () => {
                                                     onChange={async (e) => {
                                                         const newVal = e.target.checked;
                                                         setPinLockOnRestart(newVal);
-                                                        await sendMessage({
+                                                        const res = await sendMessage<{ success: boolean; error?: string }>({
                                                             type: "SET_PIN_LOCK_ON_RESTART",
                                                             lockOnRestart: newVal,
                                                         });
+                                                        if (res && !res.success) {
+                                                            setPinLockOnRestart(!newVal);
+                                                        }
                                                     }}
                                                 />
                                                 <span>Require master password on browser restart (Recommended)</span>

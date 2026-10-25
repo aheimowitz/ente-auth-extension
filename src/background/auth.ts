@@ -178,10 +178,10 @@ export const setPin = async (pin: string, lockOnRestart: boolean = false): Promi
 
     if (lockOnRestart) {
         await pinStorage.setPinData(encryptedData, nonce, salt, true, wrappedPin);
-        await authStorage.setMasterKey(masterKey);
     } else {
         await pinStorage.setPinData(encryptedData, nonce, salt, false, wrappedPin);
     }
+    await authStorage.setMasterKey(masterKey);
 };
 
 /**
@@ -194,10 +194,15 @@ export const setPinLockOnRestart = async (lockOnRestart: boolean): Promise<void>
     const hasPin = await pinStorage.hasPIN();
     if (!hasPin) throw new Error("No PIN configured");
 
-    await pinStorage.setLockOnRestart(lockOnRestart);
     if (lockOnRestart) {
-        await authStorage.setMasterKey(masterKey);
+        const wrapped = await pinStorage.getWrappedPin();
+        if (!wrapped) {
+            throw new Error("Please re-enter your PIN to enable this setting");
+        }
     }
+
+    await pinStorage.setLockOnRestart(lockOnRestart);
+    await authStorage.setMasterKey(masterKey);
 };
 
 /**
@@ -205,6 +210,10 @@ export const setPinLockOnRestart = async (lockOnRestart: boolean): Promise<void>
  */
 export const removePin = async (): Promise<void> => {
     await pinStorage.clearPinData();
+    const masterKey = await authStorage.getMasterKey();
+    if (masterKey) {
+        await authStorage.setMasterKey(masterKey);
+    }
 };
 
 /**
