@@ -68,6 +68,7 @@ export const App: React.FC = () => {
     const [pin, setPin] = useState("");
     const [usePinUnlock, setUsePinUnlock] = useState(true);
     const [hasPIN, setHasPIN] = useState(false);
+    const [pinRequiresPassword, setPinRequiresPassword] = useState(false);
     const [unlocking, setUnlocking] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [syncing, setSyncing] = useState(false);
@@ -163,7 +164,11 @@ export const App: React.FC = () => {
                         return;
                     }
 
-                    const { isLoggedIn, isUnlocked, hasPIN: pinSet } = response.data;
+                    const { isLoggedIn, isUnlocked, hasPIN: pinSet, pinRequiresPassword: reqPass } = response.data;
+
+                    setHasPIN(!!pinSet);
+                    setPinRequiresPassword(!!reqPass);
+                    setUsePinUnlock(!!pinSet && !reqPass);
 
                     if (!isLoggedIn) {
                         // Clear any cached codes we showed - user is logged out
@@ -174,8 +179,6 @@ export const App: React.FC = () => {
                         // Clear cached codes - vault is locked
                         setCodes([]);
                         setFilteredCodes([]);
-                        setHasPIN(!!pinSet);
-                        setUsePinUnlock(!!pinSet);
                         setView("unlock");
                     } else {
                         // User is authenticated - refresh codes from background
@@ -328,6 +331,7 @@ export const App: React.FC = () => {
             const response = await sendMessage<{
                 success: boolean;
                 error?: string;
+                lockedOut?: boolean;
             }>({
                 type: "UNLOCK_WITH_PIN",
                 pin,
@@ -340,6 +344,10 @@ export const App: React.FC = () => {
             } else {
                 setPin("");
                 setError(response.error || "Incorrect PIN");
+                if (response.lockedOut) {
+                    setHasPIN(false);
+                    setUsePinUnlock(false);
+                }
             }
         } catch (e) {
             setError(e instanceof Error ? e.message : "Failed to unlock");
@@ -366,6 +374,20 @@ export const App: React.FC = () => {
         await sendMessage({ type: "LOCK" });
         setCodes([]);
         setFilteredCodes([]);
+        try {
+            const response = await sendMessage<{
+                success: boolean;
+                data?: AuthState;
+            }>({ type: "GET_AUTH_STATE" });
+            if (response.success && response.data) {
+                const { hasPIN: pinSet, pinRequiresPassword: reqPass } = response.data;
+                setHasPIN(!!pinSet);
+                setPinRequiresPassword(!!reqPass);
+                setUsePinUnlock(!!pinSet && !reqPass);
+            }
+        } catch (e) {
+            console.error("Failed to refresh auth state on lock:", e);
+        }
         setView("unlock");
     };
 
@@ -397,12 +419,16 @@ export const App: React.FC = () => {
             try {
                 const response = await sendMessage<{
                     success: boolean;
-                    data?: { isLoggedIn: boolean; isUnlocked: boolean };
+                    data?: AuthState;
                 }>({ type: "GET_AUTH_STATE" });
 
                 if (response.success && response.data?.isLoggedIn) {
                     clearInterval(checkInterval);
                     setLoggingIn(false);
+                    const { hasPIN: pinSet, pinRequiresPassword: reqPass } = response.data;
+                    setHasPIN(!!pinSet);
+                    setPinRequiresPassword(!!reqPass);
+                    setUsePinUnlock(!!pinSet && !reqPass);
                     if (response.data.isUnlocked) {
                         await loadCodes();
                         setView("codes");
@@ -812,7 +838,7 @@ export const App: React.FC = () => {
 
     // Render unlock view
     if (view === "unlock") {
-        const showPin = hasPIN && usePinUnlock;
+        const showPin = hasPIN && usePinUnlock && !pinRequiresPassword;
         return (
             <div className="popup-container">
                 <div className="auth-container">
@@ -823,7 +849,7 @@ export const App: React.FC = () => {
                     {showPin ? (
                         <>
                             <div className="auth-description">
-                                Enter your PIN to unlock.
+                                Enter your PIN / passcode to unlock.
                             </div>
                             <form
                                 className="auth-form"
@@ -834,11 +860,10 @@ export const App: React.FC = () => {
                             >
                                 <input
                                     type="password"
-                                    inputMode="numeric"
                                     className="auth-input pin-input"
-                                    placeholder="PIN"
+                                    placeholder="PIN / Passcode"
                                     value={pin}
-                                    onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                                    onChange={(e) => setPin(e.target.value.slice(0, 64))}
                                     autoFocus
                                     autoComplete="off"
                                 />
@@ -861,7 +886,9 @@ export const App: React.FC = () => {
                     ) : (
                         <>
                             <div className="auth-description">
-                                Enter your password to unlock your auth codes.
+                                {pinRequiresPassword
+                                    ? "Master password required after browser restart."
+                                    : "Enter your password to unlock your auth codes."}
                             </div>
                             <form
                                 className="auth-form"
@@ -888,7 +915,7 @@ export const App: React.FC = () => {
                                 {error && <div className="auth-error">{error}</div>}
                             </form>
                             <div className="auth-links">
-                                {hasPIN && (
+                                {hasPIN && !pinRequiresPassword && (
                                     <span
                                         className="auth-link"
                                         onClick={() => { setUsePinUnlock(true); setError(null); setPassword(""); }}

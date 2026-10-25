@@ -38,6 +38,7 @@ export const App: React.FC = () => {
     const [showPinSetup, setShowPinSetup] = useState(false);
     const [pinValue, setPinValue] = useState("");
     const [pinConfirm, setPinConfirm] = useState("");
+    const [pinLockOnRestart, setPinLockOnRestart] = useState(true);
     const [pinError, setPinError] = useState<string | null>(null);
     const [pinSaving, setPinSaving] = useState(false);
 
@@ -77,6 +78,9 @@ export const App: React.FC = () => {
                 if (authResponse.success && authResponse.data) {
                     setAuthState(authResponse.data);
                     setHasPIN(!!authResponse.data.hasPIN);
+                    if (authResponse.data.pinLockOnRestart !== undefined) {
+                        setPinLockOnRestart(authResponse.data.pinLockOnRestart);
+                    }
                 }
                 if (mappingsResponse.success && mappingsResponse.data) {
                     setCustomMappings(mappingsResponse.data);
@@ -392,10 +396,33 @@ export const App: React.FC = () => {
                             </div>
 
                             {!showPinSetup ? (
-                                <div className="pin-status-row">
-                                    {hasPIN ? (
-                                        <>
-                                            <span className="pin-status-badge">PIN enabled</span>
+                                <div>
+                                    <div className="pin-status-row">
+                                        {hasPIN ? (
+                                            <>
+                                                <span className="pin-status-badge">PIN enabled</span>
+                                                <button
+                                                    className="secondary-button"
+                                                    onClick={() => {
+                                                        setPinValue("");
+                                                        setPinConfirm("");
+                                                        setPinError(null);
+                                                        setShowPinSetup(true);
+                                                    }}
+                                                >
+                                                    Change PIN
+                                                </button>
+                                                <button
+                                                    className="danger-button"
+                                                    onClick={async () => {
+                                                        await sendMessage({ type: "REMOVE_PIN" });
+                                                        setHasPIN(false);
+                                                    }}
+                                                >
+                                                    Remove PIN
+                                                </button>
+                                            </>
+                                        ) : (
                                             <button
                                                 className="secondary-button"
                                                 onClick={() => {
@@ -405,53 +432,63 @@ export const App: React.FC = () => {
                                                     setShowPinSetup(true);
                                                 }}
                                             >
-                                                Change PIN
+                                                Set PIN
                                             </button>
-                                            <button
-                                                className="danger-button"
-                                                onClick={async () => {
-                                                    await sendMessage({ type: "REMOVE_PIN" });
-                                                    setHasPIN(false);
-                                                }}
-                                            >
-                                                Remove PIN
-                                            </button>
-                                        </>
-                                    ) : (
-                                        <button
-                                            className="secondary-button"
-                                            onClick={() => {
-                                                setPinValue("");
-                                                setPinConfirm("");
-                                                setPinError(null);
-                                                setShowPinSetup(true);
-                                            }}
-                                        >
-                                            Set PIN
-                                        </button>
+                                        )}
+                                    </div>
+                                    {hasPIN && (
+                                        <div style={{ marginTop: "14px" }}>
+                                            <label className="pin-checkbox-label">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={pinLockOnRestart}
+                                                    onChange={async (e) => {
+                                                        const newVal = e.target.checked;
+                                                        setPinLockOnRestart(newVal);
+                                                        const res = await sendMessage<{ success: boolean; error?: string }>({
+                                                            type: "SET_PIN_LOCK_ON_RESTART",
+                                                            lockOnRestart: newVal,
+                                                        });
+                                                        if (res && !res.success) {
+                                                            setPinLockOnRestart(!newVal);
+                                                        }
+                                                    }}
+                                                />
+                                                <span>Require master password on browser restart (Recommended)</span>
+                                            </label>
+                                            <p className="setting-hint" style={{ marginLeft: "23px", marginTop: "2px" }}>
+                                                When enabled, your PIN is only valid during the browser session. Closing the browser requires your master password once.
+                                            </p>
+                                        </div>
                                     )}
                                 </div>
                             ) : (
                                 <div className="pin-setup-form">
                                     <input
                                         type="password"
-                                        inputMode="numeric"
                                         className="form-input"
-                                        placeholder="Enter PIN (4–8 digits)"
+                                        placeholder="Enter PIN or passcode (min 4 characters)"
                                         value={pinValue}
-                                        onChange={(e) => setPinValue(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                                        onChange={(e) => setPinValue(e.target.value.slice(0, 64))}
                                         autoFocus
                                         autoComplete="new-password"
                                     />
                                     <input
                                         type="password"
-                                        inputMode="numeric"
                                         className="form-input"
-                                        placeholder="Confirm PIN"
+                                        placeholder="Confirm PIN or passcode"
                                         value={pinConfirm}
-                                        onChange={(e) => setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                                        onChange={(e) => setPinConfirm(e.target.value.slice(0, 64))}
                                         autoComplete="new-password"
                                     />
+                                    <label className="pin-checkbox-label">
+                                        <input
+                                            type="checkbox"
+                                            checked={pinLockOnRestart}
+                                            onChange={(e) => setPinLockOnRestart(e.target.checked)}
+                                        />
+                                        <span>Require master password on browser restart (Recommended)</span>
+                                    </label>
                                     {pinError && <p className="pin-error">{pinError}</p>}
                                     <div className="form-actions">
                                         <button
@@ -466,11 +503,11 @@ export const App: React.FC = () => {
                                             onClick={async () => {
                                                 setPinError(null);
                                                 if (pinValue.length < 4) {
-                                                    setPinError("PIN must be at least 4 digits");
+                                                    setPinError("PIN or passcode must be at least 4 characters");
                                                     return;
                                                 }
                                                 if (pinValue !== pinConfirm) {
-                                                    setPinError("PINs do not match");
+                                                    setPinError("PIN or passcodes do not match");
                                                     return;
                                                 }
                                                 setPinSaving(true);
@@ -478,6 +515,7 @@ export const App: React.FC = () => {
                                                     const res = await sendMessage<{ success: boolean; error?: string }>({
                                                         type: "SET_PIN",
                                                         pin: pinValue,
+                                                        lockOnRestart: pinLockOnRestart,
                                                     });
                                                     if (res.success) {
                                                         setHasPIN(true);

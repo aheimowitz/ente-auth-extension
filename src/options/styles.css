@@ -844,6 +844,24 @@ body {
     margin: 0;
 }
 
+.pin-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    margin: 4px 0;
+    user-select: none;
+}
+
+.pin-checkbox-label input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+    accent-color: var(--accent);
+}
+
 .setting-hint {
     font-size: 12px;
     color: var(--text-muted);
