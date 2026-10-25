@@ -332,7 +332,7 @@ export const App: React.FC = () => {
                         <div className="setting-info">
                             <label>Auto-fill single match</label>
                             <p>
-                                Automatically fill and submit when only one code matches.
+                                Automatically fill when only one code matches.
                                 When off, the list opens automatically on MFA fields, including when no codes match (so you can search all codes).
                             </p>
                         </div>
@@ -342,6 +342,30 @@ export const App: React.FC = () => {
                                 checked={settings.autoFillSingleMatch}
                                 onChange={() =>
                                     handleToggle("autoFillSingleMatch")
+                                }
+                            />
+                            <span className="toggle-slider"></span>
+                        </label>
+                    </div>
+
+                    <div className="setting-item">
+                        <div className="setting-info">
+                            <label>Auto-submit forms</label>
+                            <p>
+                                Automatically submit the form after filling a code (on single match or when selecting a code).
+                            </p>
+                            {settings.autoSubmit && (
+                                <p style={{ color: "#e6a23c", fontSize: "12px", marginTop: "4px" }}>
+                                    ⚠️ Submits the form automatically without manual confirmation.
+                                </p>
+                            )}
+                        </div>
+                        <label className="toggle">
+                            <input
+                                type="checkbox"
+                                checked={settings.autoSubmit}
+                                onChange={() =>
+                                    handleToggle("autoSubmit")
                                 }
                             />
                             <span className="toggle-slider"></span>

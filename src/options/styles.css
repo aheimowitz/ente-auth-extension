@@ -66,6 +66,10 @@ body {
     gap: 12px;
 }
 
+.setting-item.disabled {
+    opacity: 0.5;
+}
+
 .setting-info {
     flex: 1;
 }
@@ -127,6 +131,11 @@ body {
 
 .toggle input:checked + .toggle-slider:before {
     transform: translateX(24px);
+}
+
+.toggle input:disabled + .toggle-slider {
+    opacity: 0.4;
+    cursor: not-allowed;
 }
 
 /* Select input */

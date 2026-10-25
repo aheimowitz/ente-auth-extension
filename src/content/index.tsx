@@ -107,7 +107,8 @@ const renderIconForCurrentDetection = async (): Promise<void> => {
         const matches = response?.data?.matches || [];
         const timeOffset = response?.data?.timeOffset || 0;
         const authState = response?.data?.authState;
-        const autoFillSingleMatch = settings?.autoFillSingleMatch ?? true;
+        const autoFillSingleMatch = settings?.autoFillSingleMatch ?? false;
+        const autoSubmit = settings?.autoSubmit ?? false;
 
         // For split-input detections (one digit per box), anchor the icon to
         // the LAST input and place it outside since the individual boxes are
@@ -120,7 +121,8 @@ const renderIconForCurrentDetection = async (): Promise<void> => {
 
         showPopup(matches, timeOffset, (otp: string, userInitiated = true) => {
             if (currentDetection) {
-                fillCode(currentDetection, otp, true, userInitiated);
+                // Respect autoSubmit setting in all cases (Vision B: user click or single-match autofill)
+                fillCode(currentDetection, otp, autoSubmit, userInitiated);
             }
         }, anchorElement, autoFillSingleMatch, authState, placement);
     } catch (error) {

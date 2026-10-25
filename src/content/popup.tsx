@@ -1022,7 +1022,7 @@ export const showPopup = (
     timeOffset: number,
     onFill: (code: string, userInitiated?: boolean) => void,
     inputElement?: HTMLInputElement,
-    autoFillSingleMatch = true,
+    autoFillSingleMatch = false,
     authState?: AuthState,
     placement: "inside" | "outside" = "inside"
 ): void => {
