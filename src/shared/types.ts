@@ -162,7 +162,7 @@ export type ExtensionMessage =
     | { type: "LOCK" }
     | { type: "UNLOCK"; password: string }
     | { type: "UNLOCK_WITH_PIN"; pin: string }
-    | { type: "SET_PIN"; pin: string }
+    | { type: "SET_PIN"; pin: string; lockOnRestart?: boolean }
     | { type: "REMOVE_PIN" }
     | { type: "GET_AUTH_STATE" }
     | { type: "GET_SETTINGS" }
@@ -181,7 +181,7 @@ export type ExtensionMessage =
  */
 export type ExtensionResponse =
     | { success: true; data?: unknown }
-    | { success: false; error: string };
+    | { success: false; error: string; lockedOut?: boolean };
 
 /**
  * Authentication state.
@@ -191,6 +191,7 @@ export interface AuthState {
     isUnlocked: boolean;
     email?: string;
     hasPIN: boolean;
+    pinRequiresPassword?: boolean;
 }
 
 /**

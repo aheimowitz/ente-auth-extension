@@ -21,6 +21,11 @@ const KEYS = {
     PIN_ENCRYPTED_DATA: "pinEncryptedData",
     PIN_NONCE: "pinNonce",
     PIN_SALT: "pinSalt",
+    // PIN security hardening (rate limiting and restart isolation)
+    PIN_FAILED_ATTEMPTS: "pinFailedAttempts",
+    PIN_LOCK_ON_RESTART: "pinLockOnRestart",
+    PIN_ENCRYPTED_WRAP: "pinEncryptedWrap",
+    PIN_WRAP_NONCE: "pinWrapNonce",
     // Session storage (cleared on browser close)
     CODES_CACHE: "codesCache",
     TIME_OFFSET: "timeOffset",
@@ -245,15 +250,73 @@ export const settingsStorage = {
  * PIN-encrypted master key storage.
  */
 export const pinStorage = {
-    async setPinData(encryptedData: string, nonce: string, salt: string): Promise<void> {
+    async setPinData(
+        encryptedData: string,
+        nonce: string,
+        salt: string,
+        lockOnRestart: boolean = false,
+        wrappedPin?: { encryptedData: string; nonce: string }
+    ): Promise<void> {
+        if (lockOnRestart) {
+            // Keep master key decryption payload strictly in session storage (RAM)
+            await Promise.all([
+                sessionStore.set(KEYS.PIN_ENCRYPTED_DATA, encryptedData),
+                sessionStore.set(KEYS.PIN_NONCE, nonce),
+                sessionStore.set(KEYS.PIN_SALT, salt),
+            ]);
+
+            // Persist restart flag and masterKey-wrapped PIN on disk
+            const writes: Promise<void>[] = [
+                localStore.set(KEYS.PIN_LOCK_ON_RESTART, true),
+                localStore.set(KEYS.PIN_SALT, salt),
+                localStore.remove(KEYS.PIN_ENCRYPTED_DATA),
+                localStore.remove(KEYS.PIN_NONCE),
+                localStore.remove(KEYS.PIN_FAILED_ATTEMPTS),
+            ];
+            if (wrappedPin) {
+                writes.push(
+                    localStore.set(KEYS.PIN_ENCRYPTED_WRAP, wrappedPin.encryptedData),
+                    localStore.set(KEYS.PIN_WRAP_NONCE, wrappedPin.nonce)
+                );
+            }
+            await Promise.all(writes);
+        } else {
+            // Standard mode: persist PIN-encrypted master key to disk
+            await Promise.all([
+                localStore.set(KEYS.PIN_ENCRYPTED_DATA, encryptedData),
+                localStore.set(KEYS.PIN_NONCE, nonce),
+                localStore.set(KEYS.PIN_SALT, salt),
+                localStore.remove(KEYS.PIN_LOCK_ON_RESTART),
+                localStore.remove(KEYS.PIN_ENCRYPTED_WRAP),
+                localStore.remove(KEYS.PIN_WRAP_NONCE),
+                localStore.remove(KEYS.PIN_FAILED_ATTEMPTS),
+                sessionStore.remove(KEYS.PIN_ENCRYPTED_DATA),
+                sessionStore.remove(KEYS.PIN_NONCE),
+                sessionStore.remove(KEYS.PIN_SALT),
+            ]);
+        }
+    },
+
+    async setSessionPin(encryptedData: string, nonce: string, salt: string): Promise<void> {
         await Promise.all([
-            localStore.set(KEYS.PIN_ENCRYPTED_DATA, encryptedData),
-            localStore.set(KEYS.PIN_NONCE, nonce),
-            localStore.set(KEYS.PIN_SALT, salt),
+            sessionStore.set(KEYS.PIN_ENCRYPTED_DATA, encryptedData),
+            sessionStore.set(KEYS.PIN_NONCE, nonce),
+            sessionStore.set(KEYS.PIN_SALT, salt),
         ]);
     },
 
     async getPinData(): Promise<{ encryptedData: string; nonce: string; salt: string } | null> {
+        // Check session storage first (used when lockOnRestart is active)
+        const [sessionEnc, sessionNonce, sessionSalt] = await Promise.all([
+            sessionStore.get<string>(KEYS.PIN_ENCRYPTED_DATA),
+            sessionStore.get<string>(KEYS.PIN_NONCE),
+            sessionStore.get<string>(KEYS.PIN_SALT),
+        ]);
+        if (sessionEnc && sessionNonce && sessionSalt) {
+            return { encryptedData: sessionEnc, nonce: sessionNonce, salt: sessionSalt };
+        }
+
+        // Fall back to local storage
         const [encryptedData, nonce, salt] = await Promise.all([
             localStore.get<string>(KEYS.PIN_ENCRYPTED_DATA),
             localStore.get<string>(KEYS.PIN_NONCE),
@@ -264,8 +327,46 @@ export const pinStorage = {
     },
 
     async hasPIN(): Promise<boolean> {
-        const data = await localStore.get<string>(KEYS.PIN_ENCRYPTED_DATA);
-        return !!data;
+        const [localPin, sessionPin, isLockOnRestart] = await Promise.all([
+            localStore.get<string>(KEYS.PIN_ENCRYPTED_DATA),
+            sessionStore.get<string>(KEYS.PIN_ENCRYPTED_DATA),
+            localStore.get<boolean>(KEYS.PIN_LOCK_ON_RESTART),
+        ]);
+        return !!localPin || !!sessionPin || !!isLockOnRestart;
+    },
+
+    async isLockOnRestart(): Promise<boolean> {
+        return !!(await localStore.get<boolean>(KEYS.PIN_LOCK_ON_RESTART));
+    },
+
+    async isPinReady(): Promise<boolean> {
+        const pinData = await this.getPinData();
+        return !!pinData;
+    },
+
+    async getWrappedPin(): Promise<{ encryptedData: string; nonce: string; salt: string } | null> {
+        const [encryptedData, nonce, salt] = await Promise.all([
+            localStore.get<string>(KEYS.PIN_ENCRYPTED_WRAP),
+            localStore.get<string>(KEYS.PIN_WRAP_NONCE),
+            localStore.get<string>(KEYS.PIN_SALT),
+        ]);
+        if (!encryptedData || !nonce || !salt) return null;
+        return { encryptedData, nonce, salt };
+    },
+
+    async getFailedAttempts(): Promise<number> {
+        return (await localStore.get<number>(KEYS.PIN_FAILED_ATTEMPTS)) ?? 0;
+    },
+
+    async incrementFailedAttempts(): Promise<number> {
+        const current = await this.getFailedAttempts();
+        const next = current + 1;
+        await localStore.set(KEYS.PIN_FAILED_ATTEMPTS, next);
+        return next;
+    },
+
+    async resetFailedAttempts(): Promise<void> {
+        await localStore.remove(KEYS.PIN_FAILED_ATTEMPTS);
     },
 
     async clearPinData(): Promise<void> {
@@ -273,6 +374,13 @@ export const pinStorage = {
             localStore.remove(KEYS.PIN_ENCRYPTED_DATA),
             localStore.remove(KEYS.PIN_NONCE),
             localStore.remove(KEYS.PIN_SALT),
+            localStore.remove(KEYS.PIN_FAILED_ATTEMPTS),
+            localStore.remove(KEYS.PIN_LOCK_ON_RESTART),
+            localStore.remove(KEYS.PIN_ENCRYPTED_WRAP),
+            localStore.remove(KEYS.PIN_WRAP_NONCE),
+            sessionStore.remove(KEYS.PIN_ENCRYPTED_DATA),
+            sessionStore.remove(KEYS.PIN_NONCE),
+            sessionStore.remove(KEYS.PIN_SALT),
         ]);
     },
 };

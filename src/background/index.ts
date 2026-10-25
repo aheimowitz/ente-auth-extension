@@ -400,12 +400,12 @@ const handleMessage = async (
 
         case "UNLOCK_WITH_PIN": {
             try {
-                const success = await unlockWithPin(message.pin);
-                if (success) {
+                const res = await unlockWithPin(message.pin);
+                if (res.success) {
                     syncCodes().catch((e) => console.error("Sync after PIN unlock failed:", e));
                     return { success: true };
                 }
-                return { success: false, error: "Incorrect PIN" };
+                return { success: false, error: res.error || "Incorrect PIN", lockedOut: res.lockedOut };
             } catch (e) {
                 return { success: false, error: e instanceof Error ? e.message : "Failed to unlock" };
             }
@@ -413,7 +413,7 @@ const handleMessage = async (
 
         case "SET_PIN": {
             try {
-                await setPin(message.pin);
+                await setPin(message.pin, message.lockOnRestart);
                 return { success: true };
             } catch (e) {
                 return { success: false, error: e instanceof Error ? e.message : "Failed to set PIN" };
