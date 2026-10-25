@@ -166,6 +166,10 @@ export const App: React.FC = () => {
 
                     const { isLoggedIn, isUnlocked, hasPIN: pinSet, pinRequiresPassword: reqPass } = response.data;
 
+                    setHasPIN(!!pinSet);
+                    setPinRequiresPassword(!!reqPass);
+                    setUsePinUnlock(!!pinSet && !reqPass);
+
                     if (!isLoggedIn) {
                         // Clear any cached codes we showed - user is logged out
                         setCodes([]);
@@ -175,9 +179,6 @@ export const App: React.FC = () => {
                         // Clear cached codes - vault is locked
                         setCodes([]);
                         setFilteredCodes([]);
-                        setHasPIN(!!pinSet);
-                        setPinRequiresPassword(!!reqPass);
-                        setUsePinUnlock(!!pinSet && !reqPass);
                         setView("unlock");
                     } else {
                         // User is authenticated - refresh codes from background
@@ -373,6 +374,20 @@ export const App: React.FC = () => {
         await sendMessage({ type: "LOCK" });
         setCodes([]);
         setFilteredCodes([]);
+        try {
+            const response = await sendMessage<{
+                success: boolean;
+                data?: AuthState;
+            }>({ type: "GET_AUTH_STATE" });
+            if (response.success && response.data) {
+                const { hasPIN: pinSet, pinRequiresPassword: reqPass } = response.data;
+                setHasPIN(!!pinSet);
+                setPinRequiresPassword(!!reqPass);
+                setUsePinUnlock(!!pinSet && !reqPass);
+            }
+        } catch (e) {
+            console.error("Failed to refresh auth state on lock:", e);
+        }
         setView("unlock");
     };
 
@@ -404,12 +419,16 @@ export const App: React.FC = () => {
             try {
                 const response = await sendMessage<{
                     success: boolean;
-                    data?: { isLoggedIn: boolean; isUnlocked: boolean };
+                    data?: AuthState;
                 }>({ type: "GET_AUTH_STATE" });
 
                 if (response.success && response.data?.isLoggedIn) {
                     clearInterval(checkInterval);
                     setLoggingIn(false);
+                    const { hasPIN: pinSet, pinRequiresPassword: reqPass } = response.data;
+                    setHasPIN(!!pinSet);
+                    setPinRequiresPassword(!!reqPass);
+                    setUsePinUnlock(!!pinSet && !reqPass);
                     if (response.data.isUnlocked) {
                         await loadCodes();
                         setView("codes");
