@@ -93,6 +93,35 @@ browser.runtime.onInstalled.addListener(({ reason }) => {
     }
 });
 
+// Right-click fallback for fields the MFA detector missed (issue #6): opens the
+// in-page code picker on whichever input was right-clicked.
+const FILL_MENU_ID = "duckey-fill-code";
+
+const createContextMenu = (): void => {
+    browser.contextMenus
+        .removeAll()
+        .then(() => {
+            browser.contextMenus.create({
+                id: FILL_MENU_ID,
+                title: "Fill code with Duckey",
+                contexts: ["editable"],
+            });
+        })
+        .catch(console.error);
+};
+
+browser.runtime.onInstalled.addListener(createContextMenu);
+browser.runtime.onStartup.addListener(createContextMenu);
+
+browser.contextMenus.onClicked.addListener((info, tab) => {
+    if (info.menuItemId !== FILL_MENU_ID || tab?.id === undefined) return;
+    browser.tabs
+        .sendMessage(tab.id, { type: "OPEN_PICKER_AT_CONTEXT_TARGET" }, { frameId: info.frameId ?? 0 })
+        .catch(() => {
+            // No content script in that frame (subframes, chrome:// pages, etc.)
+        });
+});
+
 /**
  * Initialize the background script (async tasks like alarms).
  */

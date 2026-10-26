@@ -17,6 +17,10 @@ let lastUrl = window.location.href;
 let validationInterval: ReturnType<typeof setInterval> | null = null;
 // Incremented per render so a slow, outdated state fetch can't overwrite a newer one
 let renderSeq = 0;
+// Input the user last right-clicked, for the "Fill code with Duckey" menu item
+let contextMenuTarget: HTMLInputElement | null = null;
+// The picker was requested while locked; open it once the vault is unlocked
+let pendingPickerOpen = false;
 
 /**
  * Reset state and hide popup when navigation occurs.
@@ -25,6 +29,7 @@ const resetState = (): void => {
     hidePopup();
     hasShownPopup = false;
     currentDetection = null;
+    pendingPickerOpen = false;
 };
 
 /**
@@ -35,8 +40,8 @@ const isDetectionValid = (): boolean => {
 
     const element = currentDetection.element;
 
-    // Check if element is still in the DOM
-    if (!document.body.contains(element)) return false;
+    // Check if element is still in the DOM (isConnected also covers shadow roots)
+    if (!element.isConnected) return false;
 
     // Check if element is still visible
     if (!element.offsetParent && element.style.display !== "fixed") return false;
@@ -75,7 +80,7 @@ async function sendMessageWithRetry<T>(
  * existing currentDetection. Used both for the initial render and for refreshes
  * triggered by auth state changes.
  */
-const renderIconForCurrentDetection = async (): Promise<void> => {
+const renderIconForCurrentDetection = async (openPicker = false): Promise<void> => {
     if (!currentDetection) return;
     const seq = ++renderSeq;
 
@@ -88,7 +93,8 @@ const renderIconForCurrentDetection = async (): Promise<void> => {
         }>({ type: "GET_SETTINGS" });
 
         const settings = settingsResponse?.data;
-        if (settings && !settings.showAutofillIcon) {
+        // An explicit picker request (context menu) overrides the icon setting
+        if (settings && !settings.showAutofillIcon && !openPicker && !pendingPickerOpen) {
             hidePopup();
             return;
         }
@@ -108,6 +114,9 @@ const renderIconForCurrentDetection = async (): Promise<void> => {
         const timeOffset = response?.data?.timeOffset || 0;
         const authState = response?.data?.authState;
         const autoFillSingleMatch = settings?.autoFillSingleMatch ?? true;
+        const isAuthenticated = !authState || (authState.isLoggedIn && authState.isUnlocked);
+        const openOnShow = openPicker || (pendingPickerOpen && isAuthenticated);
+        pendingPickerOpen = (openPicker || pendingPickerOpen) && !isAuthenticated;
 
         // For split-input detections (one digit per box), anchor the icon to
         // the LAST input and place it outside since the individual boxes are
@@ -122,7 +131,7 @@ const renderIconForCurrentDetection = async (): Promise<void> => {
             if (currentDetection) {
                 fillCode(currentDetection, otp, true, userInitiated);
             }
-        }, anchorElement, autoFillSingleMatch, authState, placement);
+        }, anchorElement, autoFillSingleMatch, authState, placement, openOnShow);
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         if (errorMessage.includes("Could not establish connection") ||
@@ -175,6 +184,24 @@ const debouncedCheck = (immediate = false): void => {
 };
 
 /**
+ * Open the code picker on the input the user right-clicked, for fields the
+ * detector missed or picked wrongly.
+ */
+const openPickerAtContextTarget = (): void => {
+    const target = contextMenuTarget;
+    if (!target || !target.isConnected) return;
+
+    // Keep a split detection if the click landed on one of its boxes
+    const inDetectedSplit = currentDetection?.splitInputs?.includes(target);
+    if (!inDetectedSplit && currentDetection?.element !== target) {
+        currentDetection = { element: target, confidence: 1, type: "single" };
+    }
+    // Stop automatic detection from replacing the user's choice
+    hasShownPopup = true;
+    void renderIconForCurrentDetection(true);
+};
+
+/**
  * Handle messages from the background script.
  */
 const handleMessage = (
@@ -189,6 +216,8 @@ const handleMessage = (
     } else if (msg.type === "AUTH_STATE_CHANGED") {
         // Sent by the background on login / unlock / lock / logout (issue #22)
         refreshIcon();
+    } else if (msg.type === "OPEN_PICKER_AT_CONTEXT_TARGET") {
+        openPickerAtContextTarget();
     }
     return false;
 };
@@ -272,6 +301,17 @@ const init = (): void => {
             if (e.target instanceof HTMLInputElement && !hasShownPopup) {
                 debouncedCheck(true);
             }
+        },
+        true
+    );
+
+    // Remember the right-clicked input for the context menu. composedPath()
+    // reaches inputs inside open shadow roots, which event.target hides.
+    document.addEventListener(
+        "contextmenu",
+        (e) => {
+            const target = e.composedPath()[0];
+            contextMenuTarget = target instanceof HTMLInputElement ? target : null;
         },
         true
     );
