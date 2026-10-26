@@ -80,6 +80,15 @@ onIdleStateChange((state) => {
     }).catch(console.error);
 });
 
+// Fresh installs lock the vault on browser restart. Existing installs have no
+// stored vaultTimeout and keep falling back to "never", so updating doesn't
+// change their behavior.
+browser.runtime.onInstalled.addListener(({ reason }) => {
+    if (reason === "install") {
+        settingsStorage.setSettings({ vaultTimeout: "onRestart" }).catch(console.error);
+    }
+});
+
 /**
  * Initialize the background script (async tasks like alarms).
  */

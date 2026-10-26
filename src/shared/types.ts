@@ -92,7 +92,7 @@ export interface ExtensionSettings {
     accentTheme: AccentTheme;
     /** Hex color used when accentTheme is "custom". Default: "#2F6FDE" */
     accentCustomColor: string;
-    /** When the vault auto-locks. Default: "never" */
+    /** When the vault auto-locks. Default: "onRestart" for new installs; installs that predate this setting fall back to "never" */
     vaultTimeout: VaultTimeout;
     /** Custom server URL for self-hosted instances. Empty string means use Ente Cloud. */
     serverUrl: string;
@@ -112,7 +112,7 @@ export const defaultSettings: ExtensionSettings = {
     theme: "system",
     accentTheme: "duckey",
     accentCustomColor: "#2F6FDE",
-    vaultTimeout: "never",
+    vaultTimeout: "onRestart",
     serverUrl: "",
     accountsUrl: "",
     sortOrder: "issuer",
