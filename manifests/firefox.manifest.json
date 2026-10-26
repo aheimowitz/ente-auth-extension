@@ -10,6 +10,7 @@
         "activeTab",
         "alarms",
         "idle",
+        "contextMenus",
         "<all_urls>"
     ],
     "background": {

@@ -760,6 +760,7 @@ interface AutofillIconProps {
     autoFillSingleMatch: boolean;
     domain: string;
     authState?: AuthState;
+    openOnShow?: boolean;
 }
 
 const AutofillIcon: React.FC<AutofillIconProps> = ({
@@ -770,6 +771,7 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
     autoFillSingleMatch,
     domain,
     authState,
+    openOnShow = false,
 }) => {
     // Treat unknown auth state as authenticated so we never block on a missing field.
     const isAuthenticated = !authState || (authState.isLoggedIn && authState.isUnlocked);
@@ -779,7 +781,13 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
         isAuthenticated &&
         !(autoFillSingleMatch && matches.length === 1) &&
         (matches.length > 0 || !autoFillSingleMatch);
-    const [isOpen, setIsOpen] = useState(() => shouldAutoOpenDropdown);
+    // openOnShow (explicit request, e.g. the context menu) opens even with no
+    // matches or a locked vault; a lone match is still filled directly if allowed
+    const [isOpen, setIsOpen] = useState(() =>
+        openOnShow
+            ? !(isAuthenticated && autoFillSingleMatch && matches.length === 1)
+            : shouldAutoOpenDropdown
+    );
     const [theme, setTheme] = useState<ResolvedTheme>("dark");
     const [accentColor, setAccentColor] = useState(ACCENT_COLORS.duckey);
     // Packaged icon for the default accent, otherwise draw it in the user's color
@@ -951,7 +959,8 @@ export const showPopup = (
     inputElement?: HTMLInputElement,
     autoFillSingleMatch = true,
     authState?: AuthState,
-    placement: "inside" | "outside" = "inside"
+    placement: "inside" | "outside" = "inside",
+    openOnShow = false
 ): void => {
     // Remove existing icon
     hidePopup();
@@ -983,6 +992,7 @@ export const showPopup = (
             autoFillSingleMatch={autoFillSingleMatch}
             domain={domain}
             authState={authState}
+            openOnShow={openOnShow}
         />
     );
 
