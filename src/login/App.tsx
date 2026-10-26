@@ -49,8 +49,6 @@ export const App: React.FC = () => {
     const [passkeySessionID, setPasskeySessionID] = useState<string | null>(null);
     // Accounts URL the server sent with the passkey session
     const [passkeyAccountsUrl, setPasskeyAccountsUrl] = useState<string | undefined>(undefined);
-    // Accounts URL the verification tab was opened on, used to close it afterwards
-    const passkeyAccountsUrlRef = useRef<string | null>(null);
     const [stashedEncryptedToken, setStashedEncryptedToken] = useState<string | null>(null);
     const [stashedKeyAttributes, setStashedKeyAttributes] = useState<KeyAttributes | null>(null);
     const [stashedToken, setStashedToken] = useState<string | null>(null);
@@ -61,8 +59,11 @@ export const App: React.FC = () => {
     const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     // Ref to avoid stale closure in polling callback
     const stashedMasterKeyRef = useRef<string | null>(null);
-    // Reference to the accounts tab opened for passkey verification
-    const passkeyTabRef = useRef<Window | null>(null);
+    // Accounts tab opened for passkey verification. Tracked by tab ID because
+    // the page redirects off the accounts domain (e.g. to ente.com) once done.
+    const passkeyTabIdRef = useRef<number | null>(null);
+    // Fallback handle when the tab had to be opened with window.open
+    const passkeyWindowRef = useRef<Window | null>(null);
     // Guard against multiple in-flight poll responses completing login twice
     const passkeyCompleteRef = useRef(false);
 
@@ -204,23 +205,36 @@ export const App: React.FC = () => {
     };
 
     /**
-     * Close the accounts tab that was opened for passkey verification.
-     * Uses browser.tabs.remove (reliable) with window.close() as fallback.
+     * Open the accounts verification page in a tab next to this one.
+     * Uses browser.tabs.create so we get a tab ID to close it by later,
+     * with window.open as fallback.
+     */
+    const openPasskeyTab = async (url: string) => {
+        try {
+            const current = await browser.tabs.getCurrent();
+            const tab = await browser.tabs.create({
+                url,
+                index: current?.index !== undefined ? current.index + 1 : undefined,
+            });
+            passkeyTabIdRef.current = tab.id ?? null;
+        } catch {
+            passkeyWindowRef.current = window.open(url, "_blank");
+        }
+    };
+
+    /**
+     * Close the accounts tab that was opened for passkey verification,
+     * wherever it has navigated to. Ignores a tab the user already closed.
      */
     const closePasskeyTab = async () => {
-        try {
-            const acctUrl = passkeyAccountsUrlRef.current ?? getAccountsUrl();
-            const tabs = await browser.tabs.query({ url: acctUrl + "/*" });
-            await Promise.all(
-                tabs
-                    .filter((t) => t.id !== undefined)
-                    .map((t) => browser.tabs.remove(t.id!).catch(() => {}))
-            );
-        } catch {
-            // Fall back to window reference if tabs API is unavailable
-            try { passkeyTabRef.current?.close(); } catch { /* ignore */ }
+        const tabId = passkeyTabIdRef.current;
+        if (tabId !== null) {
+            await browser.tabs.remove(tabId).catch(() => {});
+        } else {
+            try { passkeyWindowRef.current?.close(); } catch { /* ignore */ }
         }
-        passkeyTabRef.current = null;
+        passkeyTabIdRef.current = null;
+        passkeyWindowRef.current = null;
     };
 
     /**
@@ -248,17 +262,15 @@ export const App: React.FC = () => {
         // Open the accounts verification page in a new tab.
         // The redirect param is required by accounts.ente.io's whitelist check.
         // We can't redirect back to chrome-extension:// (not whitelisted), so we
-        // redirect to the accounts URL itself. The tab gets auto-closed by
-        // polling before the redirect is visible to the user.
+        // redirect to the accounts URL itself. That may bounce on to another
+        // domain (e.g. ente.com), so polling closes the tab by ID, not URL.
         const acctUrl = getAccountsUrl(serverAccountsUrl);
-        passkeyAccountsUrlRef.current = acctUrl;
         const params = new URLSearchParams({
             passkeySessionID: sessionID,
             clientPackage: "io.ente.auth.web",
             redirect: acctUrl,
         });
-        const tab = window.open(`${acctUrl}/passkeys/verify?${params.toString()}`, "_blank");
-        passkeyTabRef.current = tab;
+        void openPasskeyTab(`${acctUrl}/passkeys/verify?${params.toString()}`);
 
         // Start polling
         startPasskeyPolling(sessionID);
