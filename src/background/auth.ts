@@ -2,6 +2,7 @@
  * Authentication management for the extension.
  */
 import { deriveKey, decryptBoxBytes, decryptBox, encryptBox, generateSalt, fromB64, toB64 } from "@shared/crypto";
+import { clearPopupDraft } from "@shared/popup-draft";
 import type { AuthState, KeyAttributes } from "@shared/types";
 import { authStorage, clearAllStorage, codesStorage, pinStorage } from "./storage";
 
@@ -87,6 +88,7 @@ export const unlock = async (password: string): Promise<boolean> => {
 export const lock = async (): Promise<void> => {
     await authStorage.clearMasterKey();
     await codesStorage.clearCodes();
+    await clearPopupDraft();
 };
 
 /**

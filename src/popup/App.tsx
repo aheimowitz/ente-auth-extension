@@ -6,6 +6,7 @@ import { browser, sendMessage, openOptionsPage } from "@shared/browser";
 import { searchCodes } from "@shared/domain-matcher";
 import { generateOTPs } from "@shared/otp";
 import { useTheme } from "@shared/useTheme";
+import { clearPopupDraft, getPopupDraft, setPopupDraft } from "@shared/popup-draft";
 import type { AuthState, Code, CodeFormData, ParsedQRCode } from "@shared/types";
 import { CodeCard } from "./CodeCard";
 import { CodeForm } from "./CodeForm";
@@ -48,6 +49,20 @@ const getCachedCodesFromStorage = async (): Promise<{
 
 type View = "loading" | "login" | "unlock" | "codes" | "add" | "edit";
 
+// Set when the popup is opened in its own window via the pop-out button
+const isPoppedOut = new URLSearchParams(window.location.search).has("popout");
+if (isPoppedOut) document.documentElement.classList.add("popped-out");
+
+const openPopOutWindow = async () => {
+    await browser.windows.create({
+        url: browser.runtime.getURL("popup/index.html?popout=1"),
+        type: "popup",
+        width: 400,
+        height: 600,
+    });
+    window.close();
+};
+
 export const App: React.FC = () => {
     // Initialize theme
     useTheme();
@@ -77,6 +92,7 @@ export const App: React.FC = () => {
     const [editingCode, setEditingCode] = useState<Code | null>(null);
     const [deleteConfirm, setDeleteConfirm] = useState<Code | null>(null);
     const [formInitialData, setFormInitialData] = useState<Partial<Code> | undefined>(undefined);
+    const [formDraft, setFormDraft] = useState<Partial<Code> | undefined>(undefined);
     const [scanError, setScanError] = useState<string | null>(null);
     const [selectedTag, setSelectedTag] = useState<string>("");
     const [allTags, setAllTags] = useState<string[]>([]);
@@ -164,6 +180,9 @@ export const App: React.FC = () => {
                     }
 
                     const { isLoggedIn, isUnlocked, hasPIN: pinSet } = response.data;
+                    // Needed even when unlocked, so a later Lock offers PIN unlock
+                    setHasPIN(!!pinSet);
+                    setUsePinUnlock(!!pinSet);
 
                     if (!isLoggedIn) {
                         // Clear any cached codes we showed - user is logged out
@@ -174,14 +193,14 @@ export const App: React.FC = () => {
                         // Clear cached codes - vault is locked
                         setCodes([]);
                         setFilteredCodes([]);
-                        setHasPIN(!!pinSet);
-                        setUsePinUnlock(!!pinSet);
                         setView("unlock");
                     } else {
                         // User is authenticated - refresh codes from background
                         // (they may have changed since cache was written)
-                        await loadCodes();
-                        setView("codes");
+                        const freshCodes = await loadCodes();
+                        if (!(await restoreDraft(freshCodes))) {
+                            setView("codes");
+                        }
                     }
                 } catch (e) {
                     if (retries > 0) {
@@ -204,7 +223,7 @@ export const App: React.FC = () => {
     }, []);
 
     // Load codes from background (forces sync by default for fresh data)
-    const loadCodes = async (forceSync = true) => {
+    const loadCodes = async (forceSync = true): Promise<Code[]> => {
         try {
             const response = await sendMessage<{
                 success: boolean;
@@ -222,11 +241,77 @@ export const App: React.FC = () => {
                     code.codeDisplay?.tags?.forEach((tag) => tags.add(tag));
                 });
                 setAllTags(Array.from(tags).sort());
+                return response.data.codes;
             }
         } catch (e) {
             console.error("Failed to load codes:", e);
         }
+        return [];
     };
+
+    // Reopen an add/edit form the user left mid-edit. Returns whether one was restored.
+    const restoreDraft = async (loadedCodes: Code[]): Promise<boolean> => {
+        const draft = await getPopupDraft().catch(() => undefined);
+        if (!draft) return false;
+        if (draft.mode === "add") {
+            setFormInitialData(undefined);
+            setFormDraft(draft.data);
+            setView("add");
+            return true;
+        }
+        const code = loadedCodes.find((c) => c.id === draft.codeId);
+        if (!code) {
+            // Code was deleted elsewhere since the draft was saved
+            await clearPopupDraft();
+            return false;
+        }
+        setEditingCode(code);
+        setFormInitialData(code);
+        setFormDraft(draft.data);
+        setView("edit");
+        return true;
+    };
+
+    // Persist (or clear) unsaved form edits as the user types
+    const handleFormChange = (data: Partial<Code> | null) => {
+        const save = data
+            ? setPopupDraft({ mode: view === "edit" ? "edit" : "add", codeId: editingCode?.id, data })
+            : clearPopupDraft();
+        save.catch((e) => console.error("Failed to save draft:", e));
+    };
+
+    // Leave the add/edit form, discarding any saved draft
+    const closeForm = () => {
+        clearPopupDraft().catch((e) => console.error("Failed to clear draft:", e));
+        setFormDraft(undefined);
+        setEditingCode(null);
+        setFormInitialData(undefined);
+    };
+
+    // The vault can lock behind our back (timeout, system lock, another window).
+    // Matters most for a popped-out window, which can stay open indefinitely.
+    useEffect(() => {
+        const listener = (message: unknown) => {
+            if ((message as { type?: string })?.type !== "AUTH_STATE_CHANGED") return;
+            sendMessage<{ success: boolean; data?: AuthState }>({ type: "GET_AUTH_STATE" })
+                .then((response) => {
+                    if (!response.success || !response.data) return;
+                    const { isLoggedIn, isUnlocked, hasPIN: pinSet } = response.data;
+                    if (isLoggedIn && isUnlocked) return;
+                    setCodes([]);
+                    setFilteredCodes([]);
+                    setFormDraft(undefined);
+                    setEditingCode(null);
+                    setFormInitialData(undefined);
+                    setHasPIN(!!pinSet);
+                    setUsePinUnlock(!!pinSet);
+                    setView(isLoggedIn ? "unlock" : "login");
+                })
+                .catch(console.error);
+        };
+        browser.runtime.onMessage.addListener(listener);
+        return () => browser.runtime.onMessage.removeListener(listener);
+    }, []);
 
     // Update OTPs every second (codes only change once per period)
     // Uses `codes` (not `filteredCodes`) so sort/filter changes don't restart the interval
@@ -366,6 +451,7 @@ export const App: React.FC = () => {
         await sendMessage({ type: "LOCK" });
         setCodes([]);
         setFilteredCodes([]);
+        setUsePinUnlock(hasPIN);
         setView("unlock");
     };
 
@@ -434,6 +520,7 @@ export const App: React.FC = () => {
     const handleAddManually = () => {
         setShowFabMenu(false);
         setFormInitialData(undefined);
+        setFormDraft(undefined);
         setView("add");
     };
 
@@ -461,6 +548,7 @@ export const App: React.FC = () => {
                     period: response.data.period,
                     counter: response.data.counter,
                 });
+                setFormDraft(undefined);
                 setView("add");
             } else {
                 setScanError(response.error || "Failed to scan QR code");
@@ -474,6 +562,7 @@ export const App: React.FC = () => {
     const handleEditCode = (code: Code) => {
         setEditingCode(code);
         setFormInitialData(code);
+        setFormDraft(undefined);
         setView("edit");
     };
 
@@ -564,8 +653,7 @@ export const App: React.FC = () => {
 
             if (response.success) {
                 setDeleteConfirm(null);
-                setEditingCode(null);
-                setFormInitialData(undefined);
+                closeForm();
                 await loadCodes();
                 setView("codes");
             } else {
@@ -601,15 +689,13 @@ export const App: React.FC = () => {
         // Reload codes and go back to list
         await loadCodes();
         setView("codes");
-        setEditingCode(null);
-        setFormInitialData(undefined);
+        closeForm();
     };
 
     // Handle cancel form
     const handleCancelForm = () => {
         setView("codes");
-        setEditingCode(null);
-        setFormInitialData(undefined);
+        closeForm();
         setScanError(null);
     };
 
@@ -770,10 +856,12 @@ export const App: React.FC = () => {
                 <CodeForm
                     mode={view}
                     initialData={formInitialData as Code | undefined}
+                    draft={formDraft}
                     allTags={allTags}
                     onSave={handleSaveCode}
                     onCancel={handleCancelForm}
                     onDelete={view === "edit" && editingCode ? () => handleDeleteCode(editingCode) : undefined}
+                    onChange={handleFormChange}
                 />
 
                 {/* Delete confirmation modal */}
@@ -919,6 +1007,15 @@ export const App: React.FC = () => {
                     >
                         <SettingsIcon />
                     </button>
+                    {!isPoppedOut && (
+                        <button
+                            className="icon-button"
+                            onClick={() => openPopOutWindow().catch(console.error)}
+                            title="Pop out to a new window"
+                        >
+                            <PopOutIcon />
+                        </button>
+                    )}
                 </div>
                 <span className="header-title">Duckey</span>
                 <div className="header-right">
@@ -1261,6 +1358,15 @@ const SettingsIcon: React.FC = () => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="3" />
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+);
+
+// Pop-out icon (box with arrow leaving the corner)
+const PopOutIcon: React.FC = () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+        <polyline points="15 3 21 3 21 9" />
+        <line x1="10" y1="14" x2="21" y2="3" />
     </svg>
 );
 
