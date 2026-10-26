@@ -5,40 +5,56 @@ import React, { useState, useEffect } from "react";
 import { isValidBase32 } from "@shared/code";
 import type { Code, CodeFormData } from "@shared/types";
 
+// Form field values for a code, with the defaults used for a new code
+const formValues = (code?: Partial<Code>) => ({
+    issuer: code?.issuer || "",
+    account: code?.account || "",
+    secret: code?.secret || "",
+    type: (code?.type || "totp") as "totp" | "hotp" | "steam",
+    algorithm: (code?.algorithm || "sha1") as "sha1" | "sha256" | "sha512",
+    length: code?.length || 6,
+    period: code?.period || 30,
+    counter: code?.counter || 0,
+    tags: code?.codeDisplay?.tags || [],
+});
+
 interface CodeFormProps {
     mode: "add" | "edit";
     initialData?: Code;
+    /** Unsaved edits to restore on top of initialData */
+    draft?: Partial<Code>;
     allTags: string[];
     onSave: (data: CodeFormData) => Promise<void>;
     onCancel: () => void;
     onDelete?: () => void;
+    /** Called with the current field values after the user changes anything */
+    onChange?: (data: Partial<Code> | null) => void;
 }
 
 export const CodeForm: React.FC<CodeFormProps> = ({
     mode,
     initialData,
+    draft,
     allTags,
     onSave,
     onCancel,
     onDelete,
+    onChange,
 }) => {
-    const [issuer, setIssuer] = useState(initialData?.issuer || "");
-    const [account, setAccount] = useState(initialData?.account || "");
-    const [secret, setSecret] = useState(initialData?.secret || "");
-    const [type, setType] = useState<"totp" | "hotp" | "steam">(
-        initialData?.type || "totp"
-    );
-    const [algorithm, setAlgorithm] = useState<"sha1" | "sha256" | "sha512">(
-        initialData?.algorithm || "sha1"
-    );
-    const [digits, setDigits] = useState(initialData?.length || 6);
-    const [period, setPeriod] = useState(initialData?.period || 30);
-    const [counter, setCounter] = useState(initialData?.counter || 0);
+    const start = formValues(draft ?? initialData);
+    const [issuer, setIssuer] = useState(start.issuer);
+    const [account, setAccount] = useState(start.account);
+    const [secret, setSecret] = useState(start.secret);
+    const [type, setType] = useState(start.type);
+    const [algorithm, setAlgorithm] = useState(start.algorithm);
+    const [digits, setDigits] = useState(start.length);
+    const [period, setPeriod] = useState(start.period);
+    const [counter, setCounter] = useState(start.counter);
     const [showAdvanced, setShowAdvanced] = useState(false);
     const [showSecret, setShowSecret] = useState(false);
     const [saving, setSaving] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
-    const [tags, setTags] = useState<string[]>(initialData?.codeDisplay?.tags || []);
+    const [tags, setTags] = useState<string[]>(start.tags);
     const [tagInput, setTagInput] = useState("");
     const [showTagInput, setShowTagInput] = useState(false);
 
@@ -50,6 +66,24 @@ export const CodeForm: React.FC<CodeFormProps> = ({
             setDigits(6);
         }
     }, [type]);
+
+    // Report edits so the popup can restore them if it's closed mid-edit.
+    // Values matching initialData report null so merely opening the form isn't a draft.
+    const current = { issuer, account, secret, type, algorithm, length: digits, period, counter, tags };
+    const currentJson = JSON.stringify(current);
+    const [baselineJson] = useState(() => JSON.stringify(formValues(initialData)));
+    useEffect(() => {
+        if (!onChange) return;
+        if (currentJson === baselineJson) {
+            onChange(null);
+            return;
+        }
+        const { tags: draftTags, ...fields } = current;
+        onChange({
+            ...fields,
+            codeDisplay: { ...initialData?.codeDisplay, tags: draftTags.length > 0 ? draftTags : undefined },
+        });
+    }, [currentJson]);
 
     // Toggle a tag on/off
     const toggleTag = (tag: string) => {

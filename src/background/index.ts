@@ -36,6 +36,10 @@ const AUTH_CHANGING_MESSAGES = new Set<string>([
  * whose changes don't reach content scripts (issue #22).
  */
 const broadcastAuthStateChanged = async (): Promise<void> => {
+    // Extension pages (e.g. a popped-out popup window) listen on runtime messages
+    browser.runtime.sendMessage({ type: "AUTH_STATE_CHANGED" }).catch(() => {
+        // No extension page open
+    });
     const tabs = await browser.tabs.query({});
     await Promise.all(
         tabs.map((tab) =>
