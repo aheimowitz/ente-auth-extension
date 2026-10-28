@@ -4,15 +4,13 @@ Duckey is a browser extension that autofills 2FA codes from your [Ente Auth](htt
 
 Duckey was previously called **Ente Auth Extension**. It's the same project, renamed for its 1.0 release in the official browser stores. Same interface just new name, icon and colors (but you can switch back to ente purple in the settings if you want!)
 
-## 📥 Download
-
 <p align="center">
   <a href="https://chromewebstore.google.com/detail/duckey/immpjinemfjjbjobnioeajlalbniicpl"><img src=".github/badges/chrome-web-store-badge.png" alt="Available in the Chrome Web Store" height="56"></a>
   <a href="https://microsoftedge.microsoft.com/addons/detail/duckey/ohccakbkllnfhpjlbjnbehnajdkopocl"><img src=".github/badges/get-it-from-microsoft-edge.png" alt="Get it from Microsoft Edge" height="56"></a>
   <a href="https://addons.mozilla.org/firefox/addon/duckey/"><img src=".github/badges/get-the-addon-firefox.svg" alt="Get the add-on for Firefox" height="56"></a>
 </p>
 
-Enjoying Duckey? A quick review in your browser's store helps other people find it: [Chrome](https://chromewebstore.google.com/detail/duckey/immpjinemfjjbjobnioeajlalbniicpl/reviews) · [Edge](https://microsoftedge.microsoft.com/addons/detail/duckey/ohccakbkllnfhpjlbjnbehnajdkopocl) · [Firefox](https://addons.mozilla.org/firefox/addon/duckey/reviews/). You'll also find a "Leave a review" link at the bottom of Duckey's Settings page.
+<p align="center">Don't forget to leave a review, it really helps! <a href="https://chromewebstore.google.com/detail/duckey/immpjinemfjjbjobnioeajlalbniicpl/reviews">Chrome</a> · <a href="https://microsoftedge.microsoft.com/addons/detail/duckey/ohccakbkllnfhpjlbjnbehnajdkopocl">Edge</a> · <a href="https://addons.mozilla.org/firefox/addon/duckey/reviews/">Firefox</a></p>
 
 ![Duckey suggesting a 2FA code on a sign-in page](store-listing/1-autofill.png)
 
