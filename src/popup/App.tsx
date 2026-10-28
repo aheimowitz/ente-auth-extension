@@ -6,7 +6,13 @@ import { browser, sendMessage, openOptionsPage } from "@shared/browser";
 import { searchCodes } from "@shared/domain-matcher";
 import { generateOTPs } from "@shared/otp";
 import { useTheme } from "@shared/useTheme";
-import { clearPopupDraft, getPopupDraft, setPopupDraft } from "@shared/popup-draft";
+import {
+    clearPopupDraft,
+    getPopupDraft,
+    getPopupListState,
+    setPopupDraft,
+    setPopupListState,
+} from "@shared/popup-draft";
 import type { AuthState, Code, CodeFormData, ParsedQRCode } from "@shared/types";
 import { CodeCard } from "./CodeCard";
 import { CodeForm } from "./CodeForm";
@@ -143,6 +149,15 @@ export const App: React.FC = () => {
                 setSortOrder(settingsRes.data.sortOrder);
             }
 
+            // Restore the search/tag filter from before the popup was last closed
+            const listState = await getPopupListState().catch(() => undefined);
+            if (listState) {
+                setSearchQuery(listState.searchQuery);
+                setShowSearch(!!listState.searchQuery);
+                setSelectedTag(listState.selectedTag);
+            }
+            listStateRestoredRef.current = true;
+
             // Step 1: Try to load cached codes immediately (no service worker needed)
             const cached = await getCachedCodesFromStorage();
             if (cached && cached.codes.length > 0) {
@@ -272,13 +287,31 @@ export const App: React.FC = () => {
         return true;
     };
 
-    // Persist (or clear) unsaved form edits as the user types
+    // Remember the open form, and its values once edited, so reopening the
+    // popup returns to it. Called on open (data null = untouched) and per edit.
     const handleFormChange = (data: Partial<Code> | null) => {
-        const save = data
-            ? setPopupDraft({ mode: view === "edit" ? "edit" : "add", codeId: editingCode?.id, data })
-            : clearPopupDraft();
-        save.catch((e) => console.error("Failed to save draft:", e));
+        const mode = view === "edit" ? "edit" : "add";
+        // An untouched add form may still hold scanned QR values worth keeping;
+        // an untouched edit form reloads the latest synced code instead
+        const values = data ?? (mode === "add" ? formInitialData : undefined);
+        setPopupDraft({ mode, codeId: editingCode?.id, data: values })
+            .catch((e) => console.error("Failed to save draft:", e));
     };
+
+    // Persist the list's search text and tag filter, once the saved ones are restored
+    const listStateRestoredRef = useRef(false);
+    useEffect(() => {
+        if (!listStateRestoredRef.current) return;
+        setPopupListState({ searchQuery, selectedTag })
+            .catch((e) => console.error("Failed to save list state:", e));
+    }, [searchQuery, selectedTag]);
+
+    // Drop a remembered tag filter whose tag no longer exists
+    useEffect(() => {
+        if (selectedTag && codes.length > 0 && !allTags.includes(selectedTag)) {
+            setSelectedTag("");
+        }
+    }, [selectedTag, codes, allTags]);
 
     // Leave the add/edit form, discarding any saved draft
     const closeForm = () => {
