@@ -109,11 +109,11 @@ export const App: React.FC = () => {
         setLoggingOut(true);
         try {
             await sendMessage({ type: "LOGOUT" });
-            setAuthState({ isLoggedIn: false, isUnlocked: false, hasPIN: false });
-            setHasPIN(false);
+            // Nothing on this page is useful logged out (it would show cleared
+            // account data), so reuse the tab for logging back in
+            window.location.replace(browser.runtime.getURL("login/index.html"));
         } catch (e) {
             console.error("Failed to logout:", e);
-        } finally {
             setLoggingOut(false);
         }
     };

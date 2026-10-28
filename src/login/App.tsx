@@ -201,7 +201,14 @@ export const App: React.FC = () => {
         setStep("success");
         // Auto-close the login tab after a short delay so the user briefly
         // sees the success state, then the popup takes over.
-        setTimeout(() => window.close(), 1500);
+        // tabs.remove also works when this tab wasn't opened by script (e.g. the
+        // settings tab redirected here after logout), where window.close() is refused
+        setTimeout(() => {
+            browser.tabs
+                .getCurrent()
+                .then((tab) => (tab?.id !== undefined ? browser.tabs.remove(tab.id) : window.close()))
+                .catch(() => window.close());
+        }, 1500);
     };
 
     /**

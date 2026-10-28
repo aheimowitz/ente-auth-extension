@@ -4,7 +4,7 @@
 import { deriveKey, decryptBoxBytes, decryptBox, encryptBox, generateSalt, fromB64, toB64 } from "@shared/crypto";
 import { clearPopupState } from "@shared/popup-draft";
 import type { AuthState, KeyAttributes } from "@shared/types";
-import { authStorage, clearAllStorage, codesStorage, pinStorage } from "./storage";
+import { authStorage, clearAccountData, codesStorage, pinStorage } from "./storage";
 
 // Argon2id interactive parameters — fast enough for UX, slow enough for brute-force cost
 const PIN_OPS_LIMIT = 2; // crypto_pwhash_OPSLIMIT_INTERACTIVE
@@ -92,10 +92,10 @@ export const lock = async (): Promise<void> => {
 };
 
 /**
- * Log out completely (clear all data).
+ * Log out (clear all account data, keeping device settings).
  */
 export const logout = async (): Promise<void> => {
-    await clearAllStorage();
+    await clearAccountData();
 };
 
 /**
