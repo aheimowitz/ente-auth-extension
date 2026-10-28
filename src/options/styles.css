@@ -417,6 +417,10 @@ body {
     text-decoration: underline;
 }
 
+.options-footer-review {
+    margin-top: 6px;
+}
+
 /* Logout button */
 .logout-button {
     padding: 8px 16px;
