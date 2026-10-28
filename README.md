@@ -7,7 +7,7 @@ Duckey was previously called **Ente Auth Extension**. It's the same project, ren
 ## 📥 Download
 
 <p align="center">
-  <a href="https://chromewebstore.google.com/detail/duckey/immpjinemfjjbjobnioeajlalbniicpl"><img src=".github/badges/available-in-chrome-web-store.png" alt="Available in the Chrome Web Store" width="31.9%"></a>
+  <a href="https://chromewebstore.google.com/detail/duckey/immpjinemfjjbjobnioeajlalbniicpl"><img src=".github/badges/chrome-web-store-badge.png" alt="Available in the Chrome Web Store" width="31.9%"></a>
   <a href="https://microsoftedge.microsoft.com/addons/detail/duckey/ohccakbkllnfhpjlbjnbehnajdkopocl"><img src=".github/badges/get-it-from-microsoft-edge.png" alt="Get it from Microsoft Edge" width="36.4%"></a>
   <a href="https://addons.mozilla.org/firefox/addon/duckey/"><img src=".github/badges/get-the-addon-firefox.svg" alt="Get the add-on for Firefox" width="27.7%"></a>
 </p>
