@@ -2,7 +2,7 @@
  * Options page application component.
  */
 import React, { useEffect, useRef, useState, useMemo } from "react";
-import { browser, sendMessage } from "@shared/browser";
+import { browser, isFirefox, sendMessage } from "@shared/browser";
 import { applyAccent, useTheme } from "@shared/useTheme";
 import { getBuiltInMappings } from "@shared/domain-matcher";
 import type { AccentTheme, AuthState, Code, CustomDomainMapping, ExtensionSettings, ThemeMode, VaultTimeout } from "@shared/types";
@@ -18,6 +18,18 @@ const getExtensionVersion = (): string => {
     } catch {
         return "1.0.0";
     }
+};
+
+/**
+ * Store page where the user can leave a review, for the browser they're using.
+ * Edge has no separate reviews page; ratings are on the listing itself.
+ */
+const getReviewUrl = (): string => {
+    if (isFirefox()) return "https://addons.mozilla.org/firefox/addon/duckey/reviews/";
+    if (navigator.userAgent.includes("Edg/")) {
+        return "https://microsoftedge.microsoft.com/addons/detail/duckey/ohccakbkllnfhpjlbjnbehnajdkopocl";
+    }
+    return "https://chromewebstore.google.com/detail/duckey/immpjinemfjjbjobnioeajlalbniicpl/reviews";
 };
 
 export const App: React.FC = () => {
@@ -798,6 +810,16 @@ export const App: React.FC = () => {
                         rel="noopener noreferrer"
                     >
                         ente.io
+                    </a>
+                </p>
+                <p className="options-footer-review">
+                    Enjoying Duckey?{" "}
+                    <a
+                        href={getReviewUrl()}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        Leave a review
                     </a>
                 </p>
             </div>
