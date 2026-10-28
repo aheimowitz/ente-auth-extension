@@ -12,7 +12,7 @@ All the images are in [`store-listing/`](store-listing/). Text you can paste is 
 | --- | --- | --- |
 | Chrome Web Store | 1.0.0 submitted; in-depth review (all-sites access) | Link once approved |
 | Microsoft Edge Add-ons | **1.0.0 published** | [Edge listing](https://microsoftedge.microsoft.com/addons/detail/duckey/ohccakbkllnfhpjlbjnbehnajdkopocl) |
-| Firefox Add-ons | 1.0.0 submitted as a listed version, with source | `https://addons.mozilla.org/firefox/addon/duckey/` once approved |
+| Firefox Add-ons | **1.0.0 published** (listed). 1.0.1 was signed unlisted for the GitHub release, so the next store version is 1.0.2 | [Firefox listing](https://addons.mozilla.org/firefox/addon/duckey/) |
 
 Steps 0–4 below are done. What's left: get the CI keys (steps 2 and 3), then step 5 once all three are approved, then step 7.
 
