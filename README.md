@@ -7,9 +7,9 @@ Duckey was previously called **Ente Auth Extension**. It's the same project, ren
 ## 📥 Download
 
 <p align="center">
-  <a href="https://chromewebstore.google.com/detail/duckey/immpjinemfjjbjobnioeajlalbniicpl"><img src=".github/badges/chrome-web-store-badge.png" alt="Available in the Chrome Web Store" width="31.9%"></a>
-  <a href="https://microsoftedge.microsoft.com/addons/detail/duckey/ohccakbkllnfhpjlbjnbehnajdkopocl"><img src=".github/badges/get-it-from-microsoft-edge.png" alt="Get it from Microsoft Edge" width="36.4%"></a>
-  <a href="https://addons.mozilla.org/firefox/addon/duckey/"><img src=".github/badges/get-the-addon-firefox.svg" alt="Get the add-on for Firefox" width="27.7%"></a>
+  <a href="https://chromewebstore.google.com/detail/duckey/immpjinemfjjbjobnioeajlalbniicpl"><img src=".github/badges/chrome-web-store-badge.png" alt="Available in the Chrome Web Store" height="56"></a>
+  <a href="https://microsoftedge.microsoft.com/addons/detail/duckey/ohccakbkllnfhpjlbjnbehnajdkopocl"><img src=".github/badges/get-it-from-microsoft-edge.png" alt="Get it from Microsoft Edge" height="56"></a>
+  <a href="https://addons.mozilla.org/firefox/addon/duckey/"><img src=".github/badges/get-the-addon-firefox.svg" alt="Get the add-on for Firefox" height="56"></a>
 </p>
 
 Enjoying Duckey? A quick review in your browser's store helps other people find it: [Chrome](https://chromewebstore.google.com/detail/duckey/immpjinemfjjbjobnioeajlalbniicpl/reviews) · [Edge](https://microsoftedge.microsoft.com/addons/detail/duckey/ohccakbkllnfhpjlbjnbehnajdkopocl) · [Firefox](https://addons.mozilla.org/firefox/addon/duckey/reviews/). You'll also find a "Leave a review" link at the bottom of Duckey's Settings page.
