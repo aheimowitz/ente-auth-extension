@@ -26,7 +26,7 @@ Duckey was previously called **Ente Auth Extension**. It's the same project, ren
 
 ### From the browser stores (recommended)
 
-- **Chrome**: Chrome Web Store (link coming soon)
+- **Chrome**: [Chrome Web Store](https://chromewebstore.google.com/detail/duckey/immpjinemfjjbjobnioeajlalbniicpl)
 - **Edge**: [Microsoft Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/duckey/ohccakbkllnfhpjlbjnbehnajdkopocl)
 - **Firefox**: [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/duckey/)
 
