@@ -17,23 +17,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    env:
-      # Store credentials. Each publish step is skipped when its secrets are unset.
-      AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
-      AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
-      # "listed" publishes to addons.mozilla.org; "unlisted" (default) only signs the .xpi.
-      AMO_CHANNEL: ${{ vars.AMO_CHANNEL || 'unlisted' }}
-      # Set the STORE_PUBLISH repo variable to "off" to build the release without
-      # touching any store (e.g. when a version is submitted to the stores by hand).
-      STORE_PUBLISH: ${{ vars.STORE_PUBLISH || 'on' }}
-      CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
-      CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
-      CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
-      CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
-      EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
-      EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
-      EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -57,12 +40,19 @@ jobs:
 
       - name: Get version
         id: version
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="$INPUT_VERSION"
           else
-            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+            VERSION="${GITHUB_REF#refs/tags/v}"
           fi
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$'; then
+            echo "::error::Invalid version format: $VERSION"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Check manifest versions match
         run: |
@@ -90,7 +80,11 @@ jobs:
         run: git archive --format=zip -o duckey-source-${{ steps.version.outputs.version }}.zip HEAD
 
       - name: Sign / publish Firefox extension
-        if: ${{ env.AMO_JWT_ISSUER != '' && env.STORE_PUBLISH != 'off' }}
+        if: ${{ secrets.AMO_JWT_ISSUER != '' && vars.STORE_PUBLISH != 'off' }}
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+          AMO_CHANNEL: ${{ vars.AMO_CHANNEL || 'unlisted' }}
         run: |
           npm install -g web-ext@8
           if [ "$AMO_CHANNEL" = "listed" ]; then
@@ -106,7 +100,12 @@ jobs:
           fi
 
       - name: Publish to Chrome Web Store
-        if: ${{ env.CWS_REFRESH_TOKEN != '' && env.STORE_PUBLISH != 'off' }}
+        if: ${{ secrets.CWS_REFRESH_TOKEN != '' && vars.STORE_PUBLISH != 'off' }}
+        env:
+          CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+          CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
         run: |
           npx --yes chrome-webstore-upload-cli@3 upload \
             --source duckey-chrome-${{ steps.version.outputs.version }}.zip \
@@ -118,13 +117,17 @@ jobs:
 
       # Edge uses the Chrome (MV3) build as-is.
       - name: Publish to Edge Add-ons
-        if: ${{ env.EDGE_API_KEY != '' && env.STORE_PUBLISH != 'off' }}
-        uses: wdzeng/edge-addon@v2
+        if: ${{ secrets.EDGE_API_KEY != '' && vars.STORE_PUBLISH != 'off' }}
+        uses: wdzeng/edge-addon@9881f57720358040d079eaa06a4596dc9c273eb6 # v2.1.1
+        env:
+          EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
+          EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
+          EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
         with:
-          product-id: ${{ env.EDGE_PRODUCT_ID }}
+          product-id: ${{ secrets.EDGE_PRODUCT_ID }}
           zip-path: duckey-chrome-${{ steps.version.outputs.version }}.zip
-          client-id: ${{ env.EDGE_CLIENT_ID }}
-          api-key: ${{ env.EDGE_API_KEY }}
+          client-id: ${{ secrets.EDGE_CLIENT_ID }}
+          api-key: ${{ secrets.EDGE_API_KEY }}
 
       - name: Generate Release Notes
         id: release_notes
@@ -132,7 +135,8 @@ jobs:
           # Get the previous tag
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
 
-          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          DELIMITER=$(openssl rand -hex 16)
+          echo "notes<<${DELIMITER}" >> $GITHUB_OUTPUT
 
           if [ -n "$PREV_TAG" ]; then
             # Get the commit message body (skip the subject line, get everything else)
@@ -143,7 +147,7 @@ jobs:
 
           echo "" >> $GITHUB_OUTPUT
           echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...v${{ steps.version.outputs.version }}" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          echo "${DELIMITER}" >> $GITHUB_OUTPUT
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
