@@ -27,6 +27,7 @@ type Step =
 
 const PASSKEY_POLL_INTERVAL = 1000; // 1s to avoid rate limiting
 const PASSKEY_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+const ENTE_SIGNUP_URL = "https://auth.ente.com/signup";
 
 export const App: React.FC = () => {
     // Users are signing in to their Ente Auth account here, so use Ente Auth branding
@@ -716,6 +717,20 @@ export const App: React.FC = () => {
                             </button>
                             {error && <div className="login-error">{error}</div>}
                         </form>
+                        {/* Self-hosted servers have their own sign-up, which we don't know */}
+                        {!showServerInput && (
+                            <p className="login-signup">
+                                Don't have an account?{" "}
+                                <a
+                                    className="login-link"
+                                    href={ENTE_SIGNUP_URL}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
+                                    Create one
+                                </a>
+                            </p>
+                        )}
                         {showServerInput ? (
                             <button
                                 className="login-link"

@@ -161,6 +161,19 @@ body {
     text-decoration: underline;
 }
 
+.login-signup {
+    margin-top: 16px;
+    font-size: 14px;
+    color: var(--text-muted);
+}
+
+/* Inline link inside the sign-up sentence */
+.login-signup .login-link {
+    margin-top: 0;
+    padding: 0;
+    text-decoration: none;
+}
+
 .login-success {
     display: flex;
     flex-direction: column;
