@@ -3,7 +3,7 @@
     "name": "Duckey: 2FA Autofill for Ente Auth",
     "short_name": "Duckey",
     "version": "1.1.0",
-    "description": "Fill 2FA codes from your Ente Auth vault in one click. Unofficial; not affiliated with Ente.",
+    "description": "Fill 2FA codes from your Ente Auth vault in one click.",
     "homepage_url": "https://github.com/aheimowitz/ente-auth-extension",
     "permissions": [
         "storage",
