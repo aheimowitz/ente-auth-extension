@@ -151,8 +151,10 @@ Each `gh secret set` asks you to paste the value.
 ## 6. Every release after that
 
 1. Bump `version` in `package.json`, `manifests/chrome.manifest.json` and `manifests/firefox.manifest.json`. The workflow fails if the tag and the manifests don't match.
-2. Commit, then `git tag vX.Y.Z && git push origin master vX.Y.Z`.
-3. CI builds and uploads to all three stores and creates the GitHub release. Each store still reviews every update.
+2. If the release adds a permission, add its justification to the [Permission justifications](#permission-justifications) table, and paste it into the Chrome Web Store Privacy tab and Edge Partner Center **before** tagging. CI auto-publishes, and an update with an unexplained permission can be rejected.
+3. Commit, then `git tag vX.Y.Z && git push origin master vX.Y.Z`.
+4. CI builds and uploads to all three stores and creates the GitHub release. Each store still reviews every update.
+5. The release text CI generates is just the commit message bodies. Edit the GitHub release and replace it with hand-written notes.
 
 If a release needs to skip the stores, set `STORE_PUBLISH` to `off` first, and set it back to `on` afterwards.
 
@@ -209,6 +211,7 @@ Duckey shows and autofills two-factor authentication (TOTP) codes from the user'
 | `storage` | Stores the user's session, encrypted key material, settings and an encrypted code cache. |
 | `alarms` | Syncs the user's codes from their Ente account on a schedule. |
 | `idle` | Locks the vault when the computer is idle, if the user turns on that setting. |
+| `contextMenus` | Adds a "Fill code with Duckey" item to the right-click menu on text fields. Choosing it opens Duckey's code picker on that field, so users can fill a code when automatic detection misses the field. |
 
 ### Reviewer notes
 
