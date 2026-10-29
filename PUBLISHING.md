@@ -169,7 +169,7 @@ If a release needs to skip the stores, set `STORE_PUBLISH` to `off` first, and s
 Duckey: 2FA Autofill for Ente Auth
 
 ### Short description
-Fill 2FA codes from your Ente Auth vault in one click. Unofficial; not affiliated with Ente.
+Fill 2FA codes from your Ente Auth vault in one click.
 
 ### Detailed description
 
