@@ -151,7 +151,7 @@ Each `gh secret set` asks you to paste the value.
 ## 6. Every release after that
 
 1. Bump `version` in `package.json`, `manifests/chrome.manifest.json` and `manifests/firefox.manifest.json`. The workflow fails if the tag and the manifests don't match.
-2. If the release adds a permission, add its justification to the [Permission justifications](#permission-justifications) table, and paste it into the Chrome Web Store Privacy tab and Edge Partner Center **before** tagging. CI auto-publishes, and an update with an unexplained permission can be rejected.
+2. If the release adds a permission, add its justification to the [Permission justifications](#permission-justifications) table. The Chrome Web Store only shows a justification box for permissions in an uploaded package, so paste it into the Privacy tab (and Edge Partner Center, if it asks) **right after CI uploads** the new version.
 3. Commit, then `git tag vX.Y.Z && git push origin master vX.Y.Z`.
 4. CI builds and uploads to all three stores and creates the GitHub release. Each store still reviews every update.
 5. The release text CI generates is just the commit message bodies. Edit the GitHub release and replace it with hand-written notes.
