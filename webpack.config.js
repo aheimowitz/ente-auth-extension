@@ -54,7 +54,7 @@ module.exports = {
             stream: require.resolve("stream-browserify"),
             process: require.resolve("process/browser"),
             assert: require.resolve("assert/"),
-            vm: require.resolve("vm-browserify"),
+            vm: false,
         },
     },
     plugins: [
