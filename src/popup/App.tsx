@@ -2,8 +2,8 @@
  * Extension popup main application component.
  */
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { browser, sendMessage, openOptionsPage } from "@shared/browser";
-import { searchCodes } from "@shared/domain-matcher";
+import { browser, sendMessage, openOptionsPage, getCurrentTab } from "@shared/browser";
+import { searchCodes, matchCodesToDomain, setCustomMappings } from "@shared/domain-matcher";
 import { generateOTPs } from "@shared/otp";
 import { useTheme } from "@shared/useTheme";
 import {
@@ -13,7 +13,7 @@ import {
     setPopupDraft,
     setPopupListState,
 } from "@shared/popup-draft";
-import type { AuthState, Code, CodeFormData, ParsedQRCode } from "@shared/types";
+import type { AuthState, Code, CodeFormData, CustomDomainMapping, ParsedQRCode } from "@shared/types";
 import { CodeCard } from "./CodeCard";
 import { CodeForm } from "./CodeForm";
 
@@ -77,7 +77,7 @@ export const App: React.FC = () => {
     const [codes, setCodes] = useState<Code[]>([]);
     const [filteredCodes, setFilteredCodes] = useState<Code[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
-    const [showSearch, setShowSearch] = useState(false);
+    const [showSearch, setShowSearch] = useState(true);
     const [showSortMenu, setShowSortMenu] = useState(false);
     const [sortOrder, setSortOrderState] = useState<"issuer" | "account" | "recent">("issuer");
     const setSortOrder = (order: "issuer" | "account" | "recent") => {
@@ -111,7 +111,30 @@ export const App: React.FC = () => {
     const [exitingPinId, setExitingPinId] = useState<string | null>(null);
     const [canScrollLeft, setCanScrollLeft] = useState(false);
     const [canScrollRight, setCanScrollRight] = useState(false);
+    const [activeTabContext, setActiveTabContext] = useState<{ tabId: number; domain: string } | null>(null);
+    const [mappingPrompt, setMappingPrompt] = useState<{ domain: string; issuer: string } | null>(null);
+    const [mappingSaved, setMappingSaved] = useState(false);
+    const customMappingsRef = useRef<CustomDomainMapping[]>([]);
     const tagFilterRef = useRef<HTMLDivElement>(null);
+
+    // Keep custom mappings in sync with storage in real time
+    useEffect(() => {
+        const handleStorageChanged = (
+            changes: Record<string, { oldValue?: unknown; newValue?: unknown }>,
+            areaName: string
+        ) => {
+            if (areaName === "local" && changes.customDomainMappings) {
+                const newMappings = (changes.customDomainMappings.newValue as CustomDomainMapping[] | undefined) ?? [];
+                customMappingsRef.current = newMappings;
+                setCustomMappings(newMappings);
+            }
+        };
+
+        browser.storage.onChanged.addListener(handleStorageChanged);
+        return () => {
+            browser.storage.onChanged.removeListener(handleStorageChanged);
+        };
+    }, []);
 
     // Check if tag filter bar can scroll
     const checkTagScroll = useCallback(() => {
@@ -141,20 +164,56 @@ export const App: React.FC = () => {
     // First tries to load cached codes for instant display, then verifies auth state
     useEffect(() => {
         const initializePopup = async (): Promise<void> => {
-            // Load saved sort order from settings
+            // Load saved sort order and search preference from settings
             const settingsRes = await sendMessage<{
                 success: boolean;
-                data?: { sortOrder?: "issuer" | "account" | "recent" };
+                data?: {
+                    sortOrder?: "issuer" | "account" | "recent";
+                    focusSearchOnOpen?: boolean;
+                };
             }>({ type: "GET_SETTINGS" });
-            if (settingsRes.success && settingsRes.data?.sortOrder) {
-                setSortOrder(settingsRes.data.sortOrder);
+            if (settingsRes.success && settingsRes.data) {
+                if (settingsRes.data.sortOrder) {
+                    setSortOrderState(settingsRes.data.sortOrder);
+                }
+                setShowSearch(settingsRes.data.focusSearchOnOpen ?? true);
+            }
+
+            // Detect active tab domain for universal 1-click autofill and domain linking
+            try {
+                const tab = await getCurrentTab();
+                if (tab && tab.id !== undefined && tab.url) {
+                    const parsed = new URL(tab.url);
+                    if (parsed.protocol === "http:" || parsed.protocol === "https:" || parsed.protocol === "file:") {
+                        setActiveTabContext({
+                            tabId: tab.id,
+                            domain: parsed.protocol === "file:" ? "local" : parsed.hostname,
+                        });
+                    }
+                }
+            } catch (e) {
+                console.debug("[Duckey] Could not query active tab:", e);
+            }
+
+            // Load custom mappings to ensure domain matcher has them in memory
+            try {
+                const mappingsRes = await sendMessage<{
+                    success: boolean;
+                    data?: CustomDomainMapping[];
+                }>({ type: "GET_CUSTOM_MAPPINGS" });
+                if (mappingsRes.success && mappingsRes.data) {
+                    customMappingsRef.current = mappingsRes.data;
+                    setCustomMappings(mappingsRes.data);
+                }
+            } catch (e) {
+                console.debug("[Duckey] Could not load custom mappings:", e);
             }
 
             // Restore the search/tag filter from before the popup was last closed
             const listState = await getPopupListState().catch(() => undefined);
             if (listState) {
                 setSearchQuery(listState.searchQuery);
-                setShowSearch(!!listState.searchQuery);
+                setShowSearch(!!listState.searchQuery || (settingsRes.data?.focusSearchOnOpen ?? true));
                 setSelectedTag(listState.selectedTag);
             }
             listStateRestoredRef.current = true;
@@ -471,6 +530,39 @@ export const App: React.FC = () => {
             setError(e instanceof Error ? e.message : "Failed to unlock");
         } finally {
             setUnlocking(false);
+        }
+    };
+
+    // Handle code selection/click from code card
+    const handleCodeSelect = async (code: Code, currentOtp: string) => {
+        if (activeTabContext && activeTabContext.tabId !== null) {
+            let filled = false;
+            try {
+                const fillRes = await browser.tabs.sendMessage(activeTabContext.tabId, {
+                    type: "FILL_OTP",
+                    code: currentOtp,
+                }) as { success?: boolean } | undefined;
+                if (fillRes && fillRes.success) {
+                    filled = true;
+                }
+            } catch (e) {
+                console.debug("[Duckey] Could not fill OTP into tab:", e);
+            }
+
+            if (activeTabContext.domain && activeTabContext.domain !== "local") {
+                // Check if this domain is already recognized for this code
+                const matches = matchCodesToDomain(codes, activeTabContext.domain);
+                const isAlreadyMatched = matches.some((m) => m.code.id === code.id);
+
+                // Offer to save mapping if it was not already recognized and field was filled
+                if (!isAlreadyMatched && filled) {
+                    setMappingSaved(false);
+                    setMappingPrompt({
+                        domain: activeTabContext.domain,
+                        issuer: code.issuer || code.account || activeTabContext.domain,
+                    });
+                }
+            }
         }
     };
 
@@ -1257,6 +1349,7 @@ export const App: React.FC = () => {
                                     nextOtp={otpData.nextOtp}
                                     onEdit={handleEditCode}
                                     onPin={handlePinCode}
+                                    onSelect={handleCodeSelect}
                                 />
                             </div>
                         );
@@ -1397,6 +1490,81 @@ export const App: React.FC = () => {
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* Mapping prompt banner */}
+            {mappingPrompt && (
+                <div className="mapping-prompt-banner">
+                    {mappingSaved ? (
+                        <div className="mapping-prompt-success">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                            </svg>
+                            <span>Mapping saved for <strong>{mappingPrompt.domain}</strong>!</span>
+                        </div>
+                    ) : (
+                        <div className="mapping-prompt-card">
+                            <button
+                                className="mapping-close-btn"
+                                onClick={() => {
+                                    setMappingPrompt(null);
+                                }}
+                                title="Dismiss"
+                            >
+                                ✕
+                            </button>
+                            <div className="mapping-prompt-text">
+                                Remember <strong>{mappingPrompt.issuer}</strong> for <strong>{mappingPrompt.domain}</strong>?
+                            </div>
+                            <div className="mapping-prompt-actions">
+                                <button
+                                    className="mapping-btn-primary"
+                                    onClick={async () => {
+                                        try {
+                                            const res = await sendMessage<{ success: boolean; error?: string }>({
+                                                type: "ADD_CUSTOM_MAPPING",
+                                                mapping: {
+                                                    domain: mappingPrompt.domain,
+                                                    issuer: mappingPrompt.issuer,
+                                                },
+                                            });
+                                            if (res && res.success === false) {
+                                                console.error("Failed to add mapping:", res.error);
+                                                setMappingPrompt(null);
+                                                return;
+                                            }
+
+                                            // Update in-memory mapping list
+                                            const newMapping: CustomDomainMapping = {
+                                                domain: mappingPrompt.domain,
+                                                issuer: mappingPrompt.issuer,
+                                                createdAt: Date.now(),
+                                            };
+                                            const updated = [
+                                                ...customMappingsRef.current.filter(
+                                                    (m) => m.domain.toLowerCase() !== mappingPrompt.domain.toLowerCase()
+                                                ),
+                                                newMapping,
+                                            ];
+                                            customMappingsRef.current = updated;
+                                            setCustomMappings(updated);
+
+                                            setMappingSaved(true);
+                                            setTimeout(() => {
+                                                setMappingPrompt(null);
+                                            }, 1200);
+                                        } catch (e) {
+                                            console.error("Failed to add mapping:", e);
+                                            setMappingPrompt(null);
+                                        }
+                                    }}
+                                >
+                                    Remember
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
