@@ -17,6 +17,14 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      # Expose only boolean flags at job level so step `if:` conditions can test
+      # whether store credentials are configured without exposing secret values
+      # during `npm ci` or build steps.
+      HAS_AMO: ${{ secrets.AMO_JWT_ISSUER != '' }}
+      HAS_CWS: ${{ secrets.CWS_REFRESH_TOKEN != '' }}
+      HAS_EDGE: ${{ secrets.EDGE_API_KEY != '' }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -80,7 +88,7 @@ jobs:
         run: git archive --format=zip -o duckey-source-${{ steps.version.outputs.version }}.zip HEAD
 
       - name: Sign / publish Firefox extension
-        if: ${{ secrets.AMO_JWT_ISSUER != '' && vars.STORE_PUBLISH != 'off' }}
+        if: ${{ env.HAS_AMO == 'true' && vars.STORE_PUBLISH != 'off' }}
         env:
           AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
           AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
@@ -100,7 +108,7 @@ jobs:
           fi
 
       - name: Publish to Chrome Web Store
-        if: ${{ secrets.CWS_REFRESH_TOKEN != '' && vars.STORE_PUBLISH != 'off' }}
+        if: ${{ env.HAS_CWS == 'true' && vars.STORE_PUBLISH != 'off' }}
         env:
           CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
           CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
@@ -117,7 +125,7 @@ jobs:
 
       # Edge uses the Chrome (MV3) build as-is.
       - name: Publish to Edge Add-ons
-        if: ${{ secrets.EDGE_API_KEY != '' && vars.STORE_PUBLISH != 'off' }}
+        if: ${{ env.HAS_EDGE == 'true' && vars.STORE_PUBLISH != 'off' }}
         uses: wdzeng/edge-addon@9881f57720358040d079eaa06a4596dc9c273eb6 # v2.1.1
         env:
           EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
