@@ -10,11 +10,11 @@ All the images are in [`store-listing/`](store-listing/). Text you can paste is 
 
 | Store | Status (2026-10-24) | Listing |
 | --- | --- | --- |
-| Chrome Web Store | 1.0.0 submitted; in-depth review (all-sites access) | Link once approved |
+| Chrome Web Store | **1.0.0 published** | [Chrome listing](https://chromewebstore.google.com/detail/duckey/immpjinemfjjbjobnioeajlalbniicpl) |
 | Microsoft Edge Add-ons | **1.0.0 published** | [Edge listing](https://microsoftedge.microsoft.com/addons/detail/duckey/ohccakbkllnfhpjlbjnbehnajdkopocl) |
-| Firefox Add-ons | 1.0.0 submitted as a listed version, with source | `https://addons.mozilla.org/firefox/addon/duckey/` once approved |
+| Firefox Add-ons | **1.0.0 published** (listed). 1.0.1 was signed unlisted for the GitHub release, so the next store version is 1.0.2 | [Firefox listing](https://addons.mozilla.org/firefox/addon/duckey/) |
 
-Steps 0–4 below are done. What's left: get the CI keys (steps 2 and 3), then step 5 once all three are approved, then step 7.
+Steps 0–4 below are done, and all three stores are live. What's left: get the Chrome and Edge CI keys (steps 2 and 3), then step 5. The Chrome item ID for `CWS_EXTENSION_ID` is `immpjinemfjjbjobnioeajlalbniicpl`.
 
 ---
 
@@ -151,8 +151,10 @@ Each `gh secret set` asks you to paste the value.
 ## 6. Every release after that
 
 1. Bump `version` in `package.json`, `manifests/chrome.manifest.json` and `manifests/firefox.manifest.json`. The workflow fails if the tag and the manifests don't match.
-2. Commit, then `git tag vX.Y.Z && git push origin master vX.Y.Z`.
-3. CI builds and uploads to all three stores and creates the GitHub release. Each store still reviews every update.
+2. If the release adds a permission, add its justification to the [Permission justifications](#permission-justifications) table. The Chrome Web Store only shows a justification box for permissions in an uploaded package, so paste it into the Privacy tab (and Edge Partner Center, if it asks) **right after CI uploads** the new version.
+3. Commit, then `git tag vX.Y.Z && git push origin master vX.Y.Z`.
+4. CI builds and uploads to all three stores and creates the GitHub release. Each store still reviews every update.
+5. The release text CI generates is just the commit message bodies. Edit the GitHub release and replace it with hand-written notes.
 
 If a release needs to skip the stores, set `STORE_PUBLISH` to `off` first, and set it back to `on` afterwards.
 
@@ -169,7 +171,7 @@ If a release needs to skip the stores, set `STORE_PUBLISH` to `off` first, and s
 Duckey: 2FA Autofill for Ente Auth
 
 ### Short description
-Fill 2FA codes from your Ente Auth vault in one click. Unofficial; not affiliated with Ente.
+Fill 2FA codes from your Ente Auth vault in one click.
 
 ### Detailed description
 
@@ -209,6 +211,7 @@ Duckey shows and autofills two-factor authentication (TOTP) codes from the user'
 | `storage` | Stores the user's session, encrypted key material, settings and an encrypted code cache. |
 | `alarms` | Syncs the user's codes from their Ente account on a schedule. |
 | `idle` | Locks the vault when the computer is idle, if the user turns on that setting. |
+| `contextMenus` | Adds a "Fill code with Duckey" item to the right-click menu on text fields. Choosing it opens Duckey's code picker on that field, so users can fill a code when automatic detection misses the field. |
 
 ### Reviewer notes
 

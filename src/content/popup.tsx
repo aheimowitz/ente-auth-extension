@@ -491,6 +491,9 @@ const Dropdown: React.FC<DropdownProps> = ({
                         placeholder="Search by name or account..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyDown={(e) => e.stopPropagation()}
+                        onKeyUp={(e) => e.stopPropagation()}
+                        onKeyPress={(e) => e.stopPropagation()}
                         style={styles.searchInput}
                     />
                 </div>
@@ -629,11 +632,7 @@ const AuthPromptDropdown: React.FC<AuthPromptDropdownProps> = ({
     theme,
     accentColor,
 }) => {
-    const [password, setPassword] = useState("");
-    const [error, setError] = useState<string | null>(null);
-    const [submitting, setSubmitting] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
-    const passwordInputRef = useRef<HTMLInputElement>(null);
 
     // Close on outside click
     useEffect(() => {
@@ -651,39 +650,13 @@ const AuthPromptDropdown: React.FC<AuthPromptDropdownProps> = ({
         };
     }, [onClose]);
 
-    // Focus password input when prompting for unlock
-    useEffect(() => {
-        if (!needsLogin && passwordInputRef.current) {
-            setTimeout(() => passwordInputRef.current?.focus(), 100);
+    const handleAction = async () => {
+        if (needsLogin) {
+            await sendMessage({ type: "OPEN_LOGIN_PAGE" });
+        } else {
+            await sendMessage({ type: "OPEN_POPUP" });
         }
-    }, [needsLogin]);
-
-    const handleLogin = async () => {
-        await sendMessage({ type: "OPEN_LOGIN_PAGE" });
         onClose();
-    };
-
-    const handleUnlock = async () => {
-        if (!password.trim() || submitting) return;
-        setError(null);
-        setSubmitting(true);
-        try {
-            const res = await sendMessage<{ success: boolean; error?: string }>({
-                type: "UNLOCK",
-                password,
-            });
-            if (res?.success) {
-                setPassword("");
-                // storage.onChanged in the content script will refresh the icon
-                onClose();
-            } else {
-                setError(res?.error || "Invalid password");
-            }
-        } catch (e) {
-            setError(e instanceof Error ? e.message : "Failed to unlock");
-        } finally {
-            setSubmitting(false);
-        }
     };
 
     const colors = { ...themeColors[theme], accent: accentColor };
@@ -730,17 +703,6 @@ const AuthPromptDropdown: React.FC<AuthPromptDropdownProps> = ({
             lineHeight: 1.45,
             margin: 0,
         },
-        input: {
-            width: "100%",
-            padding: "8px 12px",
-            fontSize: "14px",
-            border: `1px solid ${colors.stroke}`,
-            borderRadius: "6px",
-            backgroundColor: colors.background,
-            color: colors.textPrimary,
-            outline: "none",
-            boxSizing: "border-box",
-        },
         button: {
             width: "100%",
             padding: "10px 16px",
@@ -751,12 +713,6 @@ const AuthPromptDropdown: React.FC<AuthPromptDropdownProps> = ({
             border: "none",
             borderRadius: "6px",
             cursor: "pointer",
-            opacity: submitting ? 0.6 : 1,
-        },
-        error: {
-            fontSize: "12px",
-            color: "#E57373",
-            margin: 0,
         },
     };
 
@@ -774,53 +730,24 @@ const AuthPromptDropdown: React.FC<AuthPromptDropdownProps> = ({
                     {needsLogin ? "Duckey" : "Vault Locked"}
                 </span>
             </div>
-            {needsLogin ? (
-                <div style={styles.body}>
-                    <p style={styles.message}>
-                        Sign in to your Ente account to autofill 2FA codes.
-                    </p>
-                    <button
-                        type="button"
-                        style={styles.button}
-                        onMouseDown={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleLogin();
-                        }}
-                    >
-                        Log in
-                    </button>
-                </div>
-            ) : (
-                <form
-                    style={styles.body}
-                    onSubmit={(e) => {
+            <div style={styles.body}>
+                <p style={styles.message}>
+                    {needsLogin
+                        ? "Sign in to your Ente account to autofill 2FA codes."
+                        : "Vault Locked — Click to unlock in extension"}
+                </p>
+                <button
+                    type="button"
+                    style={styles.button}
+                    onMouseDown={(e) => {
                         e.preventDefault();
-                        handleUnlock();
+                        e.stopPropagation();
+                        handleAction();
                     }}
                 >
-                    <p style={styles.message}>
-                        Enter your password to unlock your auth codes.
-                    </p>
-                    <input
-                        ref={passwordInputRef}
-                        type="password"
-                        placeholder="Password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        style={styles.input}
-                        disabled={submitting}
-                    />
-                    {error && <p style={styles.error}>{error}</p>}
-                    <button
-                        type="submit"
-                        style={styles.button}
-                        disabled={!password.trim() || submitting}
-                    >
-                        {submitting ? "Unlocking..." : "Unlock"}
-                    </button>
-                </form>
-            )}
+                    {needsLogin ? "Log in" : "Unlock Vault"}
+                </button>
+            </div>
         </div>
     );
 };
@@ -833,6 +760,7 @@ interface AutofillIconProps {
     autoFillSingleMatch: boolean;
     domain: string;
     authState?: AuthState;
+    openOnShow?: boolean;
 }
 
 const AutofillIcon: React.FC<AutofillIconProps> = ({
@@ -843,6 +771,7 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
     autoFillSingleMatch,
     domain,
     authState,
+    openOnShow = false,
 }) => {
     // Treat unknown auth state as authenticated so we never block on a missing field.
     const isAuthenticated = !authState || (authState.isLoggedIn && authState.isUnlocked);
@@ -852,7 +781,13 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
         isAuthenticated &&
         !(autoFillSingleMatch && matches.length === 1) &&
         (matches.length > 0 || !autoFillSingleMatch);
-    const [isOpen, setIsOpen] = useState(() => shouldAutoOpenDropdown);
+    // openOnShow (explicit request, e.g. the context menu) opens even with no
+    // matches or a locked vault; a lone match is still filled directly if allowed
+    const [isOpen, setIsOpen] = useState(() =>
+        openOnShow
+            ? !(isAuthenticated && autoFillSingleMatch && matches.length === 1)
+            : shouldAutoOpenDropdown
+    );
     const [theme, setTheme] = useState<ResolvedTheme>("dark");
     const [accentColor, setAccentColor] = useState(ACCENT_COLORS.duckey);
     // Packaged icon for the default accent, otherwise draw it in the user's color
@@ -1024,7 +959,8 @@ export const showPopup = (
     inputElement?: HTMLInputElement,
     autoFillSingleMatch = true,
     authState?: AuthState,
-    placement: "inside" | "outside" = "inside"
+    placement: "inside" | "outside" = "inside",
+    openOnShow = false
 ): void => {
     // Remove existing icon
     hidePopup();
@@ -1056,6 +992,7 @@ export const showPopup = (
             autoFillSingleMatch={autoFillSingleMatch}
             domain={domain}
             authState={authState}
+            openOnShow={openOnShow}
         />
     );
 

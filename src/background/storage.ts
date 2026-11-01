@@ -317,9 +317,16 @@ export const customMappingsStorage = {
 };
 
 /**
- * Clear all storage on logout.
+ * Clear everything tied to the account on logout: credentials, keys, codes,
+ * PIN, domain mappings and all session data. Device preferences (settings)
+ * survive, so logging out doesn't reset e.g. the vault timeout to "never".
+ * Anything not explicitly kept is removed, so new account data is wiped by default.
  */
-export const clearAllStorage = async (): Promise<void> => {
+export const clearAccountData = async (): Promise<void> => {
     await sessionStore.clear();
-    await localStore.clear();
+    const items = await browser.storage.local.get(null);
+    const keysToRemove = Object.keys(items).filter((k) => k !== KEYS.SETTINGS);
+    if (keysToRemove.length > 0) {
+        await browser.storage.local.remove(keysToRemove);
+    }
 };

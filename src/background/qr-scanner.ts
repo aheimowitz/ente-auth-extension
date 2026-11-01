@@ -18,8 +18,14 @@ export const scanQRFromPage = async (): Promise<{
     error?: string;
 }> => {
     try {
-        // Capture the visible tab as a PNG data URL
-        const dataUrl = await browser.tabs.captureVisibleTab(undefined, {
+        // Capture the visible tab as a PNG data URL. Target the last-focused
+        // normal window: when the popup is popped out, the "current" window is
+        // the popup window itself, not the page with the QR code.
+        // (windowTypes is supported by Chrome and Firefox but missing from the polyfill's types)
+        const pageWindow = await browser.windows.getLastFocused(
+            { windowTypes: ["normal"] } as Parameters<typeof browser.windows.getLastFocused>[0]
+        );
+        const dataUrl = await browser.tabs.captureVisibleTab(pageWindow.id, {
             format: "png",
         });
 

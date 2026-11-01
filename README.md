@@ -4,6 +4,14 @@ Duckey is a browser extension that autofills 2FA codes from your [Ente Auth](htt
 
 Duckey was previously called **Ente Auth Extension**. It's the same project, renamed for its 1.0 release in the official browser stores. Same interface just new name, icon and colors (but you can switch back to ente purple in the settings if you want!)
 
+<p align="center">
+  <a href="https://chromewebstore.google.com/detail/duckey/immpjinemfjjbjobnioeajlalbniicpl"><img src=".github/badges/chrome-web-store-badge.png" alt="Available in the Chrome Web Store" height="56"></a>
+  <a href="https://microsoftedge.microsoft.com/addons/detail/duckey/ohccakbkllnfhpjlbjnbehnajdkopocl"><img src=".github/badges/get-it-from-microsoft-edge.png" alt="Get it from Microsoft Edge" height="56"></a>
+  <a href="https://addons.mozilla.org/firefox/addon/duckey/"><img src=".github/badges/get-the-addon-firefox.svg" alt="Get the add-on for Firefox" height="56"></a>
+</p>
+
+<p align="center">Don't forget to leave a review, it really helps! <a href="https://chromewebstore.google.com/detail/duckey/immpjinemfjjbjobnioeajlalbniicpl/reviews">Chrome</a> · <a href="https://microsoftedge.microsoft.com/addons/detail/duckey/ohccakbkllnfhpjlbjnbehnajdkopocl">Edge</a> · <a href="https://addons.mozilla.org/firefox/addon/duckey/reviews/">Firefox</a></p>
+
 ![Duckey suggesting a 2FA code on a sign-in page](store-listing/1-autofill.png)
 
 > **Disclaimer**: This is an unofficial, community-developed browser extension. It is **not** developed, maintained, or officially supported by the Ente team. However, the Ente team has been made aware of this extension, and I am happy to collaborate with them when the time is right. Use at your own discretion.
@@ -26,9 +34,9 @@ Duckey was previously called **Ente Auth Extension**. It's the same project, ren
 
 ### From the browser stores (recommended)
 
-- **Chrome**: Chrome Web Store (link coming soon)
+- **Chrome**: [Chrome Web Store](https://chromewebstore.google.com/detail/duckey/immpjinemfjjbjobnioeajlalbniicpl)
 - **Edge**: [Microsoft Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/duckey/ohccakbkllnfhpjlbjnbehnajdkopocl)
-- **Firefox**: Firefox Add-ons (in review). Until it's live, use the signed `.xpi` from the releases (below).
+- **Firefox**: [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/duckey/)
 
 Only install Duckey from these listings or from this repository's releases. Copies published elsewhere aren't from this project.
 
@@ -52,7 +60,7 @@ If you installed an earlier version unpacked or from a GitHub release, remove th
    1. Open the `.xpi` file in Firefox, or drag it onto a Firefox window
    2. Click "Add" when Firefox asks
 
-   > The `.xpi` is signed by Mozilla, so it stays installed and gets updates from Firefox Add-ons once the listing is live. The `duckey-firefox-x.x.x.zip` is unsigned: Firefox only loads it as a temporary add-on (`about:debugging`) and removes it on restart.
+   > The `.xpi` is signed by Mozilla, so it stays installed and gets updates from [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/duckey/). The `duckey-firefox-x.x.x.zip` is unsigned: Firefox only loads it as a temporary add-on (`about:debugging`) and removes it on restart.
 
 ### From source
 
