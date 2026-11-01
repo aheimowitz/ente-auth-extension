@@ -14,6 +14,7 @@ interface CodeCardProps {
     nextOtp: string;
     onEdit?: (code: Code) => void;
     onPin?: (code: Code) => void;
+    onSelect?: (code: Code, otp: string) => void;
 }
 
 export const CodeCard: React.FC<CodeCardProps> = ({
@@ -23,6 +24,7 @@ export const CodeCard: React.FC<CodeCardProps> = ({
     nextOtp,
     onEdit,
     onPin,
+    onSelect,
 }) => {
     const [copied, setCopied] = useState(false);
     const progressBarRef = useRef<HTMLDivElement>(null);
@@ -95,8 +97,10 @@ export const CodeCard: React.FC<CodeCardProps> = ({
             await navigator.clipboard.writeText(displayOtp);
             setCopied(true);
             setTimeout(() => setCopied(false), 1500);
+            onSelect?.(code, displayOtp);
         } catch (error) {
             console.error("Failed to copy:", error);
+            onSelect?.(code, displayOtp);
         }
     };
 

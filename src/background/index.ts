@@ -8,7 +8,9 @@ import { resolveAccentColor } from "@shared/accent";
 import { updateToolbarIcon } from "@shared/icon";
 import { matchCodesToDomain, setCustomMappings } from "@shared/domain-matcher";
 import { setApiBaseUrl } from "@shared/api";
+import { generateOTPs, getRemainingSeconds, getProgress } from "@shared/otp";
 import type {
+    AutofillMatch,
     ExtensionMessage,
     ExtensionResponse,
 } from "@shared/types";
@@ -28,6 +30,16 @@ const AUTH_CHANGING_MESSAGES = new Set<string>([
     "UNLOCK_WITH_PIN",
     "LOCK",
     "LOGOUT",
+]);
+
+// Whitelist of messages that unprivileged content scripts are allowed to send.
+// All other messages are strictly restricted to privileged extension contexts (Default Deny).
+const PUBLIC_CONTENT_SCRIPT_MESSAGES = new Set<string>([
+    "GET_AUTH_STATE",
+    "GET_SETTINGS",
+    "GET_CODES_FOR_DOMAIN",
+    "OPEN_POPUP",
+    "OPEN_LOGIN_PAGE",
 ]);
 
 /**
@@ -156,16 +168,33 @@ const init = async () => {
 };
 
 /**
+ * Validate that a message sender is a privileged extension page
+ * (popup, options, login page with sender.tab === undefined or extension page URL).
+ */
+const isPrivilegedSender = (sender: Browser.Runtime.MessageSender): boolean => {
+    if (sender.id !== browser.runtime.id) {
+        return false;
+    }
+    const url = sender.url || sender.tab?.url;
+    const extensionOrigin = browser.runtime.getURL("");
+    if (url && (url.startsWith(extensionOrigin) || url === extensionOrigin.replace(/\/$/, ""))) {
+        return true;
+    }
+    // Internal extension context where sender.tab is undefined and no url is set
+    if (sender.tab === undefined && !url) {
+        return true;
+    }
+    return false;
+};
+
+/**
  * Validate that a message sender is from a trusted extension context.
  */
 const isValidSender = (sender: Browser.Runtime.MessageSender): boolean => {
     // Allow messages from extension pages (popup, options, login, background)
     if (sender.id === browser.runtime.id) {
-        // Extension's own pages are always trusted
-        // Note: In Firefox, sender.url uses a UUID different from browser.runtime.id,
-        // so we just check for the extension protocol prefix
-        if (sender.url?.startsWith("chrome-extension://") ||
-            sender.url?.startsWith("moz-extension://")) {
+        // Privileged extension pages
+        if (isPrivilegedSender(sender)) {
             return true;
         }
         // Messages from content scripts on other domains (for autofill)
@@ -187,6 +216,12 @@ const handleMessage = async (
     // Validate sender before processing any message
     if (!isValidSender(sender)) {
         console.warn("Rejected message from untrusted sender:", sender.url);
+        return { success: false, error: "Unauthorized" };
+    }
+
+    // Enforce default deny: content scripts can ONLY call whitelisted public messages
+    if (!isPrivilegedSender(sender) && !PUBLIC_CONTENT_SCRIPT_MESSAGES.has(message.type)) {
+        console.warn(`Denied message ${message.type} from unprivileged sender:`, sender.url);
         return { success: false, error: "Unauthorized" };
     }
 
@@ -248,34 +283,47 @@ const handleMessage = async (
         case "OPEN_POPUP": {
             try {
                 const windowId = sender.tab?.windowId;
-                // In Chrome MV3: chrome.action.openPopup
+                let opened = false;
                 if (typeof chrome !== "undefined" && chrome.action && typeof chrome.action.openPopup === "function") {
-                    if (windowId !== undefined) {
-                        await chrome.action.openPopup({ windowId });
-                    } else {
-                        await chrome.action.openPopup();
+                    try {
+                        if (windowId !== undefined) {
+                            await chrome.action.openPopup({ windowId });
+                        } else {
+                            await chrome.action.openPopup();
+                        }
+                        opened = true;
+                    } catch (e) {
+                        console.warn("[Duckey] chrome.action.openPopup failed:", e);
                     }
-                    return { success: true };
                 }
-                // In Firefox MV2: browser.browserAction.openPopup
-                if (browser.browserAction && typeof (browser.browserAction as { openPopup?: (options?: { windowId?: number }) => Promise<void> }).openPopup === "function") {
-                    if (windowId !== undefined) {
-                        await (browser.browserAction as { openPopup: (options?: { windowId?: number }) => Promise<void> }).openPopup({ windowId });
-                    } else {
-                        await (browser.browserAction as { openPopup: () => Promise<void> }).openPopup();
+                if (!opened && browser.browserAction && typeof (browser.browserAction as { openPopup?: (options?: { windowId?: number }) => Promise<void> }).openPopup === "function") {
+                    try {
+                        if (windowId !== undefined) {
+                            await (browser.browserAction as { openPopup: (options?: { windowId?: number }) => Promise<void> }).openPopup({ windowId });
+                        } else {
+                            await (browser.browserAction as { openPopup: () => Promise<void> }).openPopup();
+                        }
+                        opened = true;
+                    } catch (e) {
+                        console.warn("[Duckey] browserAction.openPopup failed:", e);
                     }
-                    return { success: true };
                 }
-            } catch (e) {
-                console.warn("[Duckey] openPopup failed, falling back to popup tab:", e);
-            }
-
-            // Fallback: If openPopup() fails, open popup/index.html in a tab.
-            // This immediately renders the Unlock view (PIN or password prompt only) without asking for email!
-            try {
-                await browser.tabs.create({
-                    url: browser.runtime.getURL("popup/index.html"),
-                });
+                if (!opened) {
+                    try {
+                        await browser.windows.create({
+                            url: browser.runtime.getURL("popup/index.html"),
+                            type: "popup",
+                            width: 380,
+                            height: 520,
+                            focused: true,
+                        });
+                    } catch (winError) {
+                        console.warn("[Duckey] windows.create failed, falling back to tab:", winError);
+                        await browser.tabs.create({
+                            url: browser.runtime.getURL("popup/index.html"),
+                        });
+                    }
+                }
                 return { success: true };
             } catch (e) {
                 return {
@@ -323,12 +371,47 @@ const handleMessage = async (
 
         case "GET_CODES_FOR_DOMAIN": {
             const authState = await getAuthState();
+            if (!authState.isLoggedIn || !authState.isUnlocked) {
+                return { success: true, data: { matches: [], timeOffset: 0, authState } };
+            }
+
+            // Derive domain from sender URL rather than trusting client-provided domain
+            let domain = "";
+            const rawUrl = sender.url || sender.tab?.url;
+            if (rawUrl) {
+                try {
+                    const parsed = new URL(rawUrl);
+                    domain = parsed.protocol === "file:" ? "local" : parsed.hostname;
+                } catch {
+                    domain = "";
+                }
+            }
+
+            if (!domain) {
+                return { success: false, error: "Invalid domain" };
+            }
+
             const codes = await getCodes();
             // Load and set custom mappings before matching
             const customMappings = await customMappingsStorage.getMappings();
             setCustomMappings(customMappings);
-            const matches = matchCodesToDomain(codes, message.domain);
+            const domainMatches = matchCodesToDomain(codes, domain);
             const timeOffset = await getTimeOffset();
+
+            // Return stripped match objects containing only the data necessary for autofill
+            const matches: AutofillMatch[] = domainMatches.map(({ code }) => {
+                const [otp] = generateOTPs(code, timeOffset);
+                return {
+                    id: code.id,
+                    issuer: code.issuer,
+                    account: code.account,
+                    otp,
+                    timeRemaining: getRemainingSeconds(code, timeOffset),
+                    period: code.period,
+                    progress: getProgress(code, timeOffset),
+                };
+            });
+
             return { success: true, data: { matches, timeOffset, authState } };
         }
 
