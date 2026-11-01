@@ -36,6 +36,10 @@ const AUTH_CHANGING_MESSAGES = new Set<string>([
  * whose changes don't reach content scripts (issue #22).
  */
 const broadcastAuthStateChanged = async (): Promise<void> => {
+    // Extension pages (e.g. a popped-out popup window) listen on runtime messages
+    browser.runtime.sendMessage({ type: "AUTH_STATE_CHANGED" }).catch(() => {
+        // No extension page open
+    });
     const tabs = await browser.tabs.query({});
     await Promise.all(
         tabs.map((tab) =>
@@ -78,6 +82,44 @@ onIdleStateChange((state) => {
             lock().then(broadcastAuthStateChanged).catch(console.error);
         }
     }).catch(console.error);
+});
+
+// Fresh installs lock the vault on browser restart. Existing installs have no
+// stored vaultTimeout and keep falling back to "never", so updating doesn't
+// change their behavior.
+browser.runtime.onInstalled.addListener(({ reason }) => {
+    if (reason === "install") {
+        settingsStorage.setSettings({ vaultTimeout: "onRestart" }).catch(console.error);
+    }
+});
+
+// Right-click fallback for fields the MFA detector missed (issue #6): opens the
+// in-page code picker on whichever input was right-clicked.
+const FILL_MENU_ID = "duckey-fill-code";
+
+const createContextMenu = (): void => {
+    browser.contextMenus
+        .removeAll()
+        .then(() => {
+            browser.contextMenus.create({
+                id: FILL_MENU_ID,
+                title: "Fill code with Duckey",
+                contexts: ["editable"],
+            });
+        })
+        .catch(console.error);
+};
+
+browser.runtime.onInstalled.addListener(createContextMenu);
+browser.runtime.onStartup.addListener(createContextMenu);
+
+browser.contextMenus.onClicked.addListener((info, tab) => {
+    if (info.menuItemId !== FILL_MENU_ID || tab?.id === undefined) return;
+    browser.tabs
+        .sendMessage(tab.id, { type: "OPEN_PICKER_AT_CONTEXT_TARGET" }, { frameId: info.frameId ?? 0 })
+        .catch(() => {
+            // No content script in that frame (subframes, chrome:// pages, etc.)
+        });
 });
 
 /**
@@ -199,6 +241,46 @@ const handleMessage = async (
                 return {
                     success: false,
                     error: e instanceof Error ? e.message : "Failed to open login page",
+                };
+            }
+        }
+
+        case "OPEN_POPUP": {
+            try {
+                const windowId = sender.tab?.windowId;
+                // In Chrome MV3: chrome.action.openPopup
+                if (typeof chrome !== "undefined" && chrome.action && typeof chrome.action.openPopup === "function") {
+                    if (windowId !== undefined) {
+                        await chrome.action.openPopup({ windowId });
+                    } else {
+                        await chrome.action.openPopup();
+                    }
+                    return { success: true };
+                }
+                // In Firefox MV2: browser.browserAction.openPopup
+                if (browser.browserAction && typeof (browser.browserAction as { openPopup?: (options?: { windowId?: number }) => Promise<void> }).openPopup === "function") {
+                    if (windowId !== undefined) {
+                        await (browser.browserAction as { openPopup: (options?: { windowId?: number }) => Promise<void> }).openPopup({ windowId });
+                    } else {
+                        await (browser.browserAction as { openPopup: () => Promise<void> }).openPopup();
+                    }
+                    return { success: true };
+                }
+            } catch (e) {
+                console.warn("[Duckey] openPopup failed, falling back to popup tab:", e);
+            }
+
+            // Fallback: If openPopup() fails, open popup/index.html in a tab.
+            // This immediately renders the Unlock view (PIN or password prompt only) without asking for email!
+            try {
+                await browser.tabs.create({
+                    url: browser.runtime.getURL("popup/index.html"),
+                });
+                return { success: true };
+            } catch (e) {
+                return {
+                    success: false,
+                    error: e instanceof Error ? e.message : "Failed to open popup",
                 };
             }
         }

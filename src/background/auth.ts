@@ -2,8 +2,9 @@
  * Authentication management for the extension.
  */
 import { deriveKey, decryptBoxBytes, decryptBox, encryptBox, generateSalt, fromB64, toB64, stringToB64, b64ToString } from "@shared/crypto";
+import { clearPopupState } from "@shared/popup-draft";
 import type { AuthState, KeyAttributes } from "@shared/types";
-import { authStorage, clearAllStorage, codesStorage, pinStorage } from "./storage";
+import { authStorage, clearAccountData, codesStorage, pinStorage } from "./storage";
 
 // Argon2id interactive parameters — fast enough for UX, slow enough for brute-force cost
 const PIN_OPS_LIMIT = 2; // crypto_pwhash_OPSLIMIT_INTERACTIVE
@@ -80,6 +81,7 @@ export const unlock = async (password: string): Promise<boolean> => {
         // For now, we assume successful decryption means correct password
 
         await authStorage.setMasterKey(masterKey);
+        await pinStorage.resetFailedAttempts();
 
         // If PIN is configured with lockOnRestart, restore the in-memory session PIN
         if (await pinStorage.isLockOnRestart()) {
@@ -120,13 +122,14 @@ export const restoreSessionPin = async (masterKey: string): Promise<void> => {
 export const lock = async (): Promise<void> => {
     await authStorage.clearMasterKey();
     await codesStorage.clearCodes();
+    await clearPopupState();
 };
 
 /**
- * Log out completely (clear all data).
+ * Log out (clear all account data, keeping device settings).
  */
 export const logout = async (): Promise<void> => {
-    await clearAllStorage();
+    await clearAccountData();
 };
 
 /**
@@ -216,10 +219,22 @@ export const removePin = async (): Promise<void> => {
     }
 };
 
+// Serialize PIN unlock attempts so concurrent calls cannot bypass the failed-attempt check
+// while Argon2id derivation is in flight.
+let pinUnlockQueue: Promise<unknown> = Promise.resolve();
+
 /**
  * Unlock the vault using the PIN with rate-limiting and automatic lockout.
  */
-export const unlockWithPin = async (
+export const unlockWithPin = (
+    pin: string
+): Promise<{ success: boolean; error?: string; lockedOut?: boolean }> => {
+    const next = pinUnlockQueue.then(() => unlockWithPinInternal(pin));
+    pinUnlockQueue = next.catch(() => {});
+    return next;
+};
+
+const unlockWithPinInternal = async (
     pin: string
 ): Promise<{ success: boolean; error?: string; lockedOut?: boolean }> => {
     const pinData = await pinStorage.getPinData();

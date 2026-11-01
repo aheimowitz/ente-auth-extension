@@ -2,7 +2,7 @@
  * Options page application component.
  */
 import React, { useEffect, useRef, useState, useMemo } from "react";
-import { browser, sendMessage } from "@shared/browser";
+import { browser, isFirefox, sendMessage } from "@shared/browser";
 import { applyAccent, useTheme } from "@shared/useTheme";
 import { getBuiltInMappings } from "@shared/domain-matcher";
 import type { AccentTheme, AuthState, Code, CustomDomainMapping, ExtensionSettings, ThemeMode, VaultTimeout } from "@shared/types";
@@ -18,6 +18,18 @@ const getExtensionVersion = (): string => {
     } catch {
         return "1.0.0";
     }
+};
+
+/**
+ * Store page where the user can leave a review, for the browser they're using.
+ * Edge has no separate reviews page; ratings are on the listing itself.
+ */
+const getReviewUrl = (): string => {
+    if (isFirefox()) return "https://addons.mozilla.org/firefox/addon/duckey/reviews/";
+    if (navigator.userAgent.includes("Edg/")) {
+        return "https://microsoftedge.microsoft.com/addons/detail/duckey/ohccakbkllnfhpjlbjnbehnajdkopocl";
+    }
+    return "https://chromewebstore.google.com/detail/duckey/immpjinemfjjbjobnioeajlalbniicpl/reviews";
 };
 
 export const App: React.FC = () => {
@@ -101,11 +113,11 @@ export const App: React.FC = () => {
         setLoggingOut(true);
         try {
             await sendMessage({ type: "LOGOUT" });
-            setAuthState({ isLoggedIn: false, isUnlocked: false, hasPIN: false });
-            setHasPIN(false);
+            // Nothing on this page is useful logged out (it would show cleared
+            // account data), so reuse the tab for logging back in
+            window.location.replace(browser.runtime.getURL("login/index.html"));
         } catch (e) {
             console.error("Failed to logout:", e);
-        } finally {
             setLoggingOut(false);
         }
     };
@@ -466,19 +478,21 @@ export const App: React.FC = () => {
                                 <div className="pin-setup-form">
                                     <input
                                         type="password"
+                                        inputMode="numeric"
                                         className="form-input"
-                                        placeholder="Enter PIN or passcode (min 4 characters)"
+                                        placeholder="Enter PIN (4–8 digits)"
                                         value={pinValue}
-                                        onChange={(e) => setPinValue(e.target.value.slice(0, 64))}
+                                        onChange={(e) => setPinValue(e.target.value.replace(/\D/g, "").slice(0, 8))}
                                         autoFocus
                                         autoComplete="new-password"
                                     />
                                     <input
                                         type="password"
+                                        inputMode="numeric"
                                         className="form-input"
-                                        placeholder="Confirm PIN or passcode"
+                                        placeholder="Confirm PIN"
                                         value={pinConfirm}
-                                        onChange={(e) => setPinConfirm(e.target.value.slice(0, 64))}
+                                        onChange={(e) => setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 8))}
                                         autoComplete="new-password"
                                     />
                                     <label className="pin-checkbox-label">
@@ -503,11 +517,11 @@ export const App: React.FC = () => {
                                             onClick={async () => {
                                                 setPinError(null);
                                                 if (pinValue.length < 4) {
-                                                    setPinError("PIN or passcode must be at least 4 characters");
+                                                    setPinError("PIN must be at least 4 digits");
                                                     return;
                                                 }
                                                 if (pinValue !== pinConfirm) {
-                                                    setPinError("PIN or passcodes do not match");
+                                                    setPinError("PINs do not match");
                                                     return;
                                                 }
                                                 setPinSaving(true);
@@ -836,6 +850,16 @@ export const App: React.FC = () => {
                         rel="noopener noreferrer"
                     >
                         ente.io
+                    </a>
+                </p>
+                <p className="options-footer-review">
+                    Enjoying Duckey?{" "}
+                    <a
+                        href={getReviewUrl()}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        Leave a review
                     </a>
                 </p>
             </div>
