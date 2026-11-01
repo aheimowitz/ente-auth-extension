@@ -32,6 +32,20 @@ export const fromB64 = async (input: string): Promise<Uint8Array> => {
 };
 
 /**
+ * Convert a UTF-8 string to base64.
+ */
+export const stringToB64 = async (input: string): Promise<string> => {
+    return toB64(new TextEncoder().encode(input));
+};
+
+/**
+ * Convert base64 back to a UTF-8 string.
+ */
+export const b64ToString = async (b64: string): Promise<string> => {
+    return new TextDecoder().decode(await fromB64(b64));
+};
+
+/**
  * Convert BytesOrB64 to bytes.
  */
 const bytes = async (bob: BytesOrB64): Promise<Uint8Array> =>
