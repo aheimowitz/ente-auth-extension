@@ -209,8 +209,8 @@ export const settingsStorage = {
         // Migrate from old autofillEnabled setting if present
         const legacyAutofill = (stored as Record<string, unknown>)?.autofillEnabled as boolean | undefined;
         const showAutofillIcon = stored?.showAutofillIcon ?? legacyAutofill ?? true;
-        const autoFillSingleMatch = stored?.autoFillSingleMatch ?? legacyAutofill ?? false;
-        const autoSubmit = stored?.autoSubmit ?? (stored as Record<string, unknown>)?.autoSubmitSingleMatch as boolean | undefined ?? false;
+        const autoFillSingleMatch = stored?.autoFillSingleMatch ?? legacyAutofill ?? true;
+        const autoSubmit = stored?.autoSubmit ?? true;
 
         // Migrate from old lockOnBrowserClose boolean to vaultTimeout
         let vaultTimeout: VaultTimeout = stored?.vaultTimeout ?? "never";

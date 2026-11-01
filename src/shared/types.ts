@@ -82,9 +82,9 @@ export interface AuthCodesAndTimeOffset {
 export interface ExtensionSettings {
     /** Show autofill icon on MFA fields. Default: true */
     showAutofillIcon: boolean;
-    /** Automatically fill when single match found. Default: false */
+    /** Automatically fill when single match found. Default: true */
     autoFillSingleMatch: boolean;
-    /** Automatically submit form after autofill (on click or single match). Default: false */
+    /** Automatically submit form after autofill (on click or single match). Default: true */
     autoSubmit: boolean;
     /** Sync interval in minutes. Default: 5 */
     syncInterval: number;
@@ -109,8 +109,8 @@ export interface ExtensionSettings {
  */
 export const defaultSettings: ExtensionSettings = {
     showAutofillIcon: true,
-    autoFillSingleMatch: false,
-    autoSubmit: false,
+    autoFillSingleMatch: true,
+    autoSubmit: true,
     syncInterval: 5,
     theme: "system",
     accentTheme: "duckey",

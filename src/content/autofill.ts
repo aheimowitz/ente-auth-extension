@@ -54,7 +54,7 @@ const incrementSubmitAttempts = (): void => {
 export const fillCode = (
     detection: MFAFieldDetection,
     code: string,
-    autoSubmit = false,
+    autoSubmit = true,
     userInitiated = true
 ): void => {
     if (detection.type === "split" && detection.splitInputs) {
