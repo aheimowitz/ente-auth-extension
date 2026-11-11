@@ -9,6 +9,10 @@ on:
       version:
         description: 'Version for the release (e.g., 1.0.0)'
         required: true
+      skip:
+        description: 'Stores to skip, comma-separated (firefox, chrome, edge). Use when re-running a release that already reached some stores.'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -30,6 +34,17 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      # Re-running a release by hand: build from the existing tag rather than the
+      # branch head, so the artifacts and release notes match the tagged release.
+      - name: Check out existing release tag
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          if git rev-parse -q --verify "refs/tags/v$INPUT_VERSION" >/dev/null; then
+            git checkout "v$INPUT_VERSION"
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -88,7 +103,7 @@ jobs:
         run: git archive --format=zip -o duckey-source-${{ steps.version.outputs.version }}.zip HEAD
 
       - name: Sign / publish Firefox extension
-        if: ${{ env.HAS_AMO == 'true' && vars.STORE_PUBLISH != 'off' }}
+        if: ${{ env.HAS_AMO == 'true' && vars.STORE_PUBLISH != 'off' && !contains(github.event.inputs.skip, 'firefox') }}
         env:
           AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
           AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
@@ -108,7 +123,7 @@ jobs:
           fi
 
       - name: Publish to Chrome Web Store
-        if: ${{ env.HAS_CWS == 'true' && vars.STORE_PUBLISH != 'off' }}
+        if: ${{ env.HAS_CWS == 'true' && vars.STORE_PUBLISH != 'off' && !contains(github.event.inputs.skip, 'chrome') }}
         env:
           CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
           CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
@@ -125,7 +140,7 @@ jobs:
 
       # Edge uses the Chrome (MV3) build as-is.
       - name: Publish to Edge Add-ons
-        if: ${{ env.HAS_EDGE == 'true' && vars.STORE_PUBLISH != 'off' }}
+        if: ${{ env.HAS_EDGE == 'true' && vars.STORE_PUBLISH != 'off' && !contains(github.event.inputs.skip, 'edge') }}
         uses: wdzeng/edge-addon@9881f57720358040d079eaa06a4596dc9c273eb6 # v2.1.1
         env:
           EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
