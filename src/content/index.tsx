@@ -4,7 +4,7 @@
  */
 import type Browser from "webextension-polyfill";
 import { browser, sendMessage } from "@shared/browser";
-import type { AuthState, DomainMatch, ExtensionSettings, MFAFieldDetection } from "@shared/types";
+import type { AuthState, AutofillMatch, ExtensionSettings, MFAFieldDetection } from "@shared/types";
 import { fillCode } from "./autofill";
 import { getBestMFAField } from "./detector";
 import { hidePopup, showPopup } from "./popup";
@@ -21,6 +21,8 @@ let renderSeq = 0;
 let contextMenuTarget: HTMLInputElement | null = null;
 // The picker was requested while locked; open it once the vault is unlocked
 let pendingPickerOpen = false;
+// Cached extension settings
+let currentSettings: ExtensionSettings | null = null;
 
 /**
  * Reset state and hide popup when navigation occurs.
@@ -84,8 +86,6 @@ const renderIconForCurrentDetection = async (openPicker = false): Promise<void> 
     if (!currentDetection) return;
     const seq = ++renderSeq;
 
-    const domain = window.location.hostname;
-
     try {
         const settingsResponse = await sendMessageWithRetry<{
             success: boolean;
@@ -93,6 +93,9 @@ const renderIconForCurrentDetection = async (openPicker = false): Promise<void> 
         }>({ type: "GET_SETTINGS" });
 
         const settings = settingsResponse?.data;
+        if (settings) {
+            currentSettings = settings;
+        }
         // An explicit picker request (context menu) overrides the icon setting
         if (settings && !settings.showAutofillIcon && !openPicker && !pendingPickerOpen) {
             hidePopup();
@@ -101,11 +104,10 @@ const renderIconForCurrentDetection = async (openPicker = false): Promise<void> 
 
         const response = await sendMessageWithRetry<{
             success: boolean;
-            data?: { matches: DomainMatch[]; timeOffset: number; authState?: AuthState };
+            data?: { matches: AutofillMatch[]; timeOffset: number; authState?: AuthState };
             error?: string;
         }>({
             type: "GET_CODES_FOR_DOMAIN",
-            domain,
         });
 
         if (seq !== renderSeq || !currentDetection) return;
@@ -114,6 +116,7 @@ const renderIconForCurrentDetection = async (openPicker = false): Promise<void> 
         const timeOffset = response?.data?.timeOffset || 0;
         const authState = response?.data?.authState;
         const autoFillSingleMatch = settings?.autoFillSingleMatch ?? true;
+        const autoSubmit = settings?.autoSubmit ?? true;
         const isAuthenticated = !authState || (authState.isLoggedIn && authState.isUnlocked);
         const openOnShow = openPicker || (pendingPickerOpen && isAuthenticated);
         pendingPickerOpen = (openPicker || pendingPickerOpen) && !isAuthenticated;
@@ -129,7 +132,7 @@ const renderIconForCurrentDetection = async (openPicker = false): Promise<void> 
 
         showPopup(matches, timeOffset, (otp: string, userInitiated = true) => {
             if (currentDetection) {
-                fillCode(currentDetection, otp, true, userInitiated);
+                fillCode(currentDetection, otp, autoSubmit, userInitiated);
             }
         }, anchorElement, autoFillSingleMatch, authState, placement, openOnShow);
     } catch (error) {
@@ -206,13 +209,31 @@ const openPickerAtContextTarget = (): void => {
  */
 const handleMessage = (
     message: unknown,
-    _sender: Browser.Runtime.MessageSender,
+    sender: Browser.Runtime.MessageSender,
     sendResponse: (response: unknown) => void
 ): boolean => {
+    if (sender.id && sender.id !== browser.runtime.id) {
+        return false;
+    }
     const msg = message as { type?: string; code?: string };
-    if (msg.type === "FILL_OTP" && msg.code && currentDetection) {
-        fillCode(currentDetection, msg.code);
-        sendResponse({ success: true });
+    if (msg.type === "FILL_OTP" && msg.code) {
+        const detection = currentDetection || getBestMFAField();
+        if (detection) {
+            const autoSubmit = currentSettings?.autoSubmit ?? true;
+            fillCode(detection, msg.code, autoSubmit, true);
+            sendResponse({ success: true });
+        } else {
+            const activeEl = document.activeElement as HTMLInputElement | null;
+            if (activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA")) {
+                activeEl.value = msg.code;
+                activeEl.dispatchEvent(new Event("input", { bubbles: true }));
+                activeEl.dispatchEvent(new Event("change", { bubbles: true }));
+                sendResponse({ success: true });
+            } else {
+                sendResponse({ success: false, error: "No target field found" });
+            }
+        }
+        return false;
     } else if (msg.type === "AUTH_STATE_CHANGED") {
         // Sent by the background on login / unlock / lock / logout (issue #22)
         refreshIcon();
@@ -224,11 +245,12 @@ const handleMessage = (
 
 // Storage keys whose changes mean the user logged in/out, locked, or unlocked
 // the vault and the inline icon needs to update its state.
-const AUTH_RELATED_STORAGE_KEYS = new Set([
+const REFRESH_TRIGGER_STORAGE_KEYS = new Set([
     "authToken",
     "keyAttributes",
     "masterKey",
     "masterKeySession",
+    "settings",
     // Firefox MV2 fallback prefix used by sessionStore
     "session_masterKey",
     "session_masterKeySession",
@@ -240,6 +262,15 @@ const AUTH_RELATED_STORAGE_KEYS = new Set([
 const init = (): void => {
     console.log("Ente Auth content script initialized");
 
+    // Fetch initial settings
+    sendMessageWithRetry<{ success: boolean; data?: ExtensionSettings }>({
+        type: "GET_SETTINGS",
+    }).then((res) => {
+        if (res?.data) {
+            currentSettings = res.data;
+        }
+    }).catch(() => {});
+
     // Listen for messages from background
     browser.runtime.onMessage.addListener(
         handleMessage as Parameters<typeof browser.runtime.onMessage.addListener>[0]
@@ -249,8 +280,11 @@ const init = (): void => {
     // happening in the popup or another tab).
     try {
         browser.storage.onChanged.addListener((changes) => {
+            if (changes.settings?.newValue) {
+                currentSettings = changes.settings.newValue as ExtensionSettings;
+            }
             const keys = Object.keys(changes);
-            if (keys.some((k) => AUTH_RELATED_STORAGE_KEYS.has(k))) {
+            if (keys.some((k) => REFRESH_TRIGGER_STORAGE_KEYS.has(k))) {
                 refreshIcon();
             }
         });

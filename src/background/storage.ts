@@ -238,6 +238,7 @@ export const settingsStorage = {
             serverUrl: stored?.serverUrl ?? "",
             accountsUrl: stored?.accountsUrl ?? "",
             sortOrder: stored?.sortOrder ?? "issuer",
+            focusSearchOnOpen: stored?.focusSearchOnOpen ?? true,
         };
     },
 
