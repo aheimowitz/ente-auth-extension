@@ -158,6 +158,11 @@ Each `gh secret set` asks you to paste the value.
 
 If a release needs to skip the stores, set `STORE_PUBLISH` to `off` first, and set it back to `on` afterwards.
 
+If a release fails partway (for example, Firefox was submitted but Chrome failed), fix the cause and re-run it by hand, skipping the stores that already have the version. The run builds from the existing tag:
+```bash
+gh workflow run release.yml -f version=1.2.0 -f skip=firefox
+```
+
 ## 7. After launch
 
 - Update the README's install section to point to the three store pages. Tell people who loaded it unpacked to remove that copy and install from the store.
