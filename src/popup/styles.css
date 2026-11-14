@@ -218,6 +218,22 @@ html.popped-out body {
     gap: 8px;
 }
 
+/* Heading above the current site's suggested codes, and above the rest */
+.codes-section-label {
+    flex-shrink: 0;
+    padding: 4px 4px 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.codes-section-label + .code-card-wrapper {
+    margin-top: -2px;
+}
+
 /* Code card wrapper for animations */
 .code-card-wrapper {
     flex-shrink: 0;

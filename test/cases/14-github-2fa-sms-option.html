@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>14. GitHub 2FA with "SMS Code" alternative link</title>
+    <link rel="stylesheet" href="_shared.css" />
+</head>
+<body>
+    <a class="back" href="../index.html">&larr; Back to index</a>
+    <h1>14. GitHub 2FA with "SMS Code" alternative link</h1>
+    <div class="expect yes">Should show icon &mdash; id/name say TOTP; the SMS mention is a link to another method</div>
+
+    <div>
+        <div>
+            <div>
+                <form action="/sessions/two-factor" method="post">
+                    <label id="session-otp-input-label" for="app_totp">Enter the verification code</label>
+                    <input type="text" name="app_otp" id="app_totp" value="" aria-labelledby="session-otp-input-label"
+                        autocomplete="off" class="form-control width-full mb-2 js-verification-code-input-auto-submit input-code-verification-2fa app_totp"
+                        inputmode="numeric" pattern="([0-9]{6})|([0-9a-fA-F]{5}-?[0-9a-fA-F]{5})" placeholder="XXXXXX" />
+                    <button type="submit">Verify</button>
+                </form>
+            </div>
+            <noscript>
+                <ul><li><a href="#">SMS Code</a></li><li><a href="#">2FA recovery code</a></li></ul>
+            </noscript>
+            <p>More options</p>
+            <ul class="two-factor-alternatives">
+                <li><a href="#"><span>SMS Code</span></a></li>
+                <li><a href="#"><span>2FA recovery code</span></a></li>
+            </ul>
+        </div>
+    </div>
+
+    <p class="hint">
+        GitHub's markup as of Nov 2026: autocomplete changed from "one-time-code" to "off", so the
+        nearby-text scan ran and matched "SMS" in the alternatives list.
+    </p>
+</body>
+</html>

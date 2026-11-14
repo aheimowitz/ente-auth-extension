@@ -362,6 +362,33 @@ const countTypeableInputs = (form: HTMLFormElement): number =>
     ).length;
 
 /**
+ * Elements whose text doesn't describe the field next to them: links and
+ * buttons offering other sign-in methods ("Use SMS code instead") and content
+ * that isn't rendered (noscript fallbacks, scripts, templates).
+ */
+const NON_PROSE_SELECTOR = "a, button, [role='button'], [role='link'], noscript, script, style, template";
+
+/**
+ * Up to maxChars of an element's visible prose, skipping NON_PROSE_SELECTOR
+ * subtrees.
+ */
+const getProseText = (root: HTMLElement, maxChars: number): string => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+        acceptNode: (node) =>
+            node instanceof Element && node.matches(NON_PROSE_SELECTOR)
+                ? NodeFilter.FILTER_REJECT
+                : NodeFilter.FILTER_ACCEPT,
+    });
+    let text = "";
+    while (text.length < maxChars && walker.nextNode()) {
+        if (walker.currentNode.nodeType === Node.TEXT_NODE) {
+            text += walker.currentNode.nodeValue;
+        }
+    }
+    return text.slice(0, maxChars);
+};
+
+/**
  * Return true if this input is clearly NOT a TOTP field: a non-MFA code (promo,
  * captcha, postal...), or an out-of-band code (SMS / email / voice) that the
  * user receives elsewhere and types in manually.
@@ -416,16 +443,16 @@ const isExcludedField = (input: HTMLInputElement): boolean => {
     }
 
     // Walk up a few levels of ancestors looking for OOB hints in nearby text.
-    // Skipped when autocomplete="one-time-code" is set: that attribute is the
-    // HTML standard signal of developer intent for an OTP field, and the broad
-    // ancestor scan false-positives on legitimate TOTP forms that mention SMS
-    // or email anywhere in nearby boilerplate (backup options, help links,
-    // footer copy). Precise signals above still apply.
-    if (input.autocomplete !== "one-time-code") {
+    // Skipped when autocomplete="one-time-code" is set or the field names
+    // itself TOTP: both are explicit developer intent for an authenticator
+    // code, and the broad ancestor scan false-positives on legitimate TOTP
+    // forms that mention SMS or email anywhere in nearby boilerplate (backup
+    // options, help links, footer copy). Precise signals above still apply.
+    const namesTotp = /totp/i.test(`${input.name} ${input.id}`);
+    if (input.autocomplete !== "one-time-code" && !namesTotp) {
         let oobAncestor: HTMLElement | null = input.parentElement;
         for (let depth = 0; depth < 4 && oobAncestor && oobAncestor !== document.body; depth++) {
-            const nearbyText = oobAncestor.textContent || "";
-            if (matchesPattern(nearbyText.slice(0, 500), OOB_LABEL_PATTERNS)) {
+            if (matchesPattern(getProseText(oobAncestor, 500), OOB_LABEL_PATTERNS)) {
                 return true;
             }
             oobAncestor = oobAncestor.parentElement;
