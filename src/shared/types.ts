@@ -340,6 +340,8 @@ export interface FieldDiagnosis {
     confidence: number;
     /** Whether an SMS/email/backup-code pattern excluded the field */
     excluded: boolean;
+    /** Which check excluded it and the word it matched, e.g. 'label matched "sms"' */
+    exclusionReason: string | null;
     /** Whether the input is one box of a detected split (one digit per box) field */
     inSplitGroup: boolean;
     /** Whether this input is the field Duckey would attach to */
@@ -361,6 +363,10 @@ export interface ReportedField {
     ariaLabel?: string;
     label?: string;
     inShadowRoot: boolean;
+    /** The field's opening tag without its value, long attribute values shortened */
+    openingTag?: string;
+    /** Up to 4 parent elements, nearest first, as tag#id.class (no text) */
+    ancestors?: string[];
     diagnosis?: FieldDiagnosis;
 }
 

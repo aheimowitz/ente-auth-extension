@@ -343,10 +343,17 @@ const MFA_LABEL_PATTERNS = [
  * Underscores count as hyphens so snake_case names (e.g. Rails'
  * "user[two_factor_code]") match the hyphenated patterns.
  */
-const matchesPattern = (value: string | null, patterns: string[]): boolean => {
-    if (!value) return false;
+const matchesPattern = (value: string | null, patterns: string[]): boolean =>
+    findPattern(value, patterns) !== null;
+
+/**
+ * The first pattern found in the string, or null. Same matching rules as
+ * matchesPattern.
+ */
+const findPattern = (value: string | null, patterns: string[]): string | null => {
+    if (!value) return null;
     const lower = value.toLowerCase().replace(/_/g, "-");
-    return patterns.some((pattern) => lower.includes(pattern));
+    return patterns.find((pattern) => lower.includes(pattern)) ?? null;
 };
 
 /**
@@ -396,7 +403,18 @@ const getProseText = (root: HTMLElement, maxChars: number): string => {
  * Used as an early-exit for both single-input and split-input detection so SMS
  * 6-box UIs don't trigger the autofill icon.
  */
-const isExcludedField = (input: HTMLInputElement): boolean => {
+const isExcludedField = (input: HTMLInputElement): boolean => getExclusionReason(input) !== null;
+
+/**
+ * Why isExcludedField excludes this input, naming the check and the matched
+ * word (e.g. 'label matched "text message"'), or null if it isn't excluded.
+ */
+const getExclusionReason = (input: HTMLInputElement): string | null => {
+    const found = (where: string, value: string | null | undefined, patterns: string[]): string | null => {
+        const match = findPattern(value ?? null, patterns);
+        return match ? `${where} matched "${match}"` : null;
+    };
+
     const dataAttrsText = Array.from(input.attributes)
         .filter(attr => attr.name.startsWith("data-"))
         .map(attr => `${attr.name} ${attr.value}`)
@@ -411,35 +429,30 @@ const isExcludedField = (input: HTMLInputElement): boolean => {
         dataAttrsText,
     ].filter(Boolean).join(" ");
 
-    if (matchesPattern(inputText, EXCLUSION_PATTERNS)) return true;
-
     const inputLabel = findLabelForInput(input);
-    if (inputLabel && matchesPattern(inputLabel.textContent, EXCLUSION_PATTERNS)) return true;
-
     const inputContainer = input.closest("form, fieldset, [role='group']") || input.parentElement?.parentElement;
-    if (inputContainer) {
-        const containerText = `${(inputContainer as HTMLElement).id || ""} ${(inputContainer as HTMLElement).className || ""}`;
-        if (matchesPattern(containerText, EXCLUSION_PATTERNS)) return true;
-    }
+    const containerText = inputContainer
+        ? `${(inputContainer as HTMLElement).id || ""} ${(inputContainer as HTMLElement).className || ""}`
+        : null;
+
+    const nonMfa =
+        found("field attributes (name, id, class, placeholder, aria-label, data-*)", inputText, EXCLUSION_PATTERNS) ??
+        found("label", inputLabel?.textContent, EXCLUSION_PATTERNS) ??
+        found("container id/class", containerText, EXCLUSION_PATTERNS);
+    if (nonMfa) return nonMfa;
 
     // Out-of-band delivery hints (SMS / email / voice)
-    const placeholder = input.placeholder || "";
-    const ariaLabel = input.getAttribute("aria-label") || "";
-    const labelText = inputLabel?.textContent || "";
-    if (
-        matchesPattern(placeholder, OOB_LABEL_PATTERNS) ||
-        matchesPattern(ariaLabel, OOB_LABEL_PATTERNS) ||
-        matchesPattern(labelText, OOB_LABEL_PATTERNS)
-    ) {
-        return true;
-    }
+    const oob =
+        found("placeholder", input.placeholder, OOB_LABEL_PATTERNS) ??
+        found("aria-label", input.getAttribute("aria-label"), OOB_LABEL_PATTERNS) ??
+        found("label", inputLabel?.textContent, OOB_LABEL_PATTERNS);
+    if (oob) return oob;
 
     const oobDescribedById = input.getAttribute("aria-describedby");
     if (oobDescribedById) {
         const describedBy = document.getElementById(oobDescribedById);
-        if (describedBy && matchesPattern(describedBy.textContent, OOB_LABEL_PATTERNS)) {
-            return true;
-        }
+        const described = found("aria-describedby text", describedBy?.textContent, OOB_LABEL_PATTERNS);
+        if (described) return described;
     }
 
     // Walk up a few levels of ancestors looking for OOB hints in nearby text.
@@ -452,14 +465,17 @@ const isExcludedField = (input: HTMLInputElement): boolean => {
     if (input.autocomplete !== "one-time-code" && !namesTotp) {
         let oobAncestor: HTMLElement | null = input.parentElement;
         for (let depth = 0; depth < 4 && oobAncestor && oobAncestor !== document.body; depth++) {
-            if (matchesPattern(getProseText(oobAncestor, 500), OOB_LABEL_PATTERNS)) {
-                return true;
-            }
+            const nearby = found(
+                `text ${depth + 1} level${depth ? "s" : ""} up`,
+                getProseText(oobAncestor, 500),
+                OOB_LABEL_PATTERNS
+            );
+            if (nearby) return nearby;
             oobAncestor = oobAncestor.parentElement;
         }
     }
 
-    return false;
+    return null;
 };
 
 /**
@@ -755,8 +771,8 @@ export const diagnoseField = (input: HTMLInputElement): FieldDiagnosis => {
     else if (!input.offsetParent) skipped = "input is hidden (no offsetParent)";
     else if (input.readOnly || input.disabled) skipped = "input is read-only or disabled";
 
-    const excluded = isExcludedField(input);
+    const exclusionReason = getExclusionReason(input);
     const confidence = skipped ? 0 : calculateConfidence(input);
 
-    return { skipped, confidence, excluded, inSplitGroup, isBestMatch };
+    return { skipped, confidence, excluded: exclusionReason !== null, exclusionReason, inSplitGroup, isBestMatch };
 };

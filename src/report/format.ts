@@ -36,7 +36,9 @@ const verdict = (d: FieldDiagnosis): string => {
             : `picked as the code field (confidence ${d.confidence.toFixed(2)})`;
     }
     if (d.inSplitGroup) return "part of a detected split field, but not picked";
-    if (d.excluded) return "excluded: looks like an SMS / email / backup code field";
+    if (d.excluded) {
+        return `excluded as an SMS / email / non-MFA code field: ${d.exclusionReason ?? "unknown reason"}`;
+    }
     return `not picked (confidence ${d.confidence.toFixed(2)}, needs 0.50)`;
 };
 
@@ -57,8 +59,16 @@ const fieldTable = (field: ReportedField): string => {
         .filter(([, v]) => v !== undefined && v !== "")
         .map(([k, v]) => `| ${k} | \`${String(v).replace(/[|`]/g, " ")}\` |`);
     if (field.inShadowRoot) lines.push("| shadow DOM | yes |");
-    if (field.diagnosis) lines.push(`| detector | ${verdict(field.diagnosis)} |`);
-    return ["| Attribute | Value |", "|---|---|", ...lines].join("\n");
+    if (field.diagnosis) lines.push(`| detector | ${verdict(field.diagnosis).replace(/\|/g, "/")} |`);
+    if (field.ancestors?.length) {
+        lines.push(`| parents | \`${field.ancestors.join(" < ").replace(/[|`]/g, " ")}\` |`);
+    }
+    const table = ["| Attribute | Value |", "|---|---|", ...lines].join("\n");
+    if (!field.openingTag) return table;
+    // Fence longer than any backtick run in the tag, so attribute values can't end it early
+    const longestRun = Math.max(0, ...(field.openingTag.match(/`+/g) ?? []).map((run) => run.length));
+    const fence = "`".repeat(Math.max(3, longestRun + 1));
+    return `${table}\n\n${fence}html\n${field.openingTag}\n${fence}`;
 };
 
 export const formatTitle = (report: ProblemReport): string => {
