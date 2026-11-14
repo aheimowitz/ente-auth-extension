@@ -1,0 +1,47 @@
+/* Same look as the getting started guide */
+@import "../welcome/styles.css";
+
+.report-page {
+    max-width: 720px;
+}
+
+.report-label {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.report-textarea,
+.report-body {
+    display: block;
+    resize: vertical;
+    border-radius: 10px;
+    font-family: inherit;
+    line-height: 1.5;
+}
+
+.report-body {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+    margin-bottom: 8px;
+}
+
+.report-check {
+    margin: 12px 0 24px;
+}
+
+.report-preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.welcome-card .report-status {
+    margin: 16px 0 0;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    color: var(--text-primary);
+    background-color: var(--accent-soft);
+}

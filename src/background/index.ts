@@ -3,7 +3,7 @@
  * Handles message passing, alarms, and extension lifecycle.
  */
 import type Browser from "webextension-polyfill";
-import { browser, createAlarm, onAlarm, onMessage, onIdleStateChange, setIdleDetectionInterval } from "@shared/browser";
+import { browser, isFirefox, createAlarm, onAlarm, onMessage, onIdleStateChange, setIdleDetectionInterval } from "@shared/browser";
 import { resolveAccentColor } from "@shared/accent";
 import { updateToolbarIcon } from "@shared/icon";
 import { matchCodesToDomain, setCustomMappings } from "@shared/domain-matcher";
@@ -13,9 +13,10 @@ import type {
     ExtensionResponse,
 } from "@shared/types";
 import { getAuthState, login, lock, logout, unlock, setPin, removePin, unlockWithPin, setPinLockOnRestart } from "./auth";
-import { settingsStorage, authStorage, customMappingsStorage } from "./storage";
+import { settingsStorage, authStorage, customMappingsStorage, welcomeStorage } from "./storage";
 import { getCodes, getTimeOffset, syncCodes, createCode, updateCode, deleteCode } from "./sync";
 import { scanQRFromPage } from "./qr-scanner";
+import { getProblemReport, startProblemReport } from "./report";
 
 const SYNC_ALARM_NAME = "ente-auth-sync";
 
@@ -96,6 +97,9 @@ browser.runtime.onInstalled.addListener(({ reason }) => {
 // Right-click fallback for fields the MFA detector missed (issue #6): opens the
 // in-page code picker on whichever input was right-clicked.
 const FILL_MENU_ID = "duckey-fill-code";
+// "Report a problem" entries: on a field, and on the toolbar icon for the page
+const REPORT_FIELD_MENU_ID = "duckey-report-field";
+const REPORT_PAGE_MENU_ID = "duckey-report-page";
 
 const createContextMenu = (): void => {
     browser.contextMenus
@@ -106,6 +110,17 @@ const createContextMenu = (): void => {
                 title: "Fill code with Duckey",
                 contexts: ["editable"],
             });
+            browser.contextMenus.create({
+                id: REPORT_FIELD_MENU_ID,
+                title: "Report a problem with this field",
+                contexts: ["editable"],
+            });
+            browser.contextMenus.create({
+                id: REPORT_PAGE_MENU_ID,
+                title: "Report a problem on this page",
+                // MV2 Firefox calls the toolbar button "browser_action"
+                contexts: [isFirefox() ? "browser_action" : "action"] as Browser.Menus.ContextType[],
+            });
         })
         .catch(console.error);
 };
@@ -114,6 +129,12 @@ browser.runtime.onInstalled.addListener(createContextMenu);
 browser.runtime.onStartup.addListener(createContextMenu);
 
 browser.contextMenus.onClicked.addListener((info, tab) => {
+    if (info.menuItemId === REPORT_FIELD_MENU_ID || info.menuItemId === REPORT_PAGE_MENU_ID) {
+        startProblemReport(tab, info.menuItemId === REPORT_FIELD_MENU_ID ? "field" : "page", info.frameId).catch(
+            console.error
+        );
+        return;
+    }
     if (info.menuItemId !== FILL_MENU_ID || tab?.id === undefined) return;
     browser.tabs
         .sendMessage(tab.id, { type: "OPEN_PICKER_AT_CONTEXT_TARGET" }, { frameId: info.frameId ?? 0 })
@@ -518,6 +539,14 @@ const handleMessage = async (
             } catch (e) {
                 return { success: false, error: e instanceof Error ? e.message : "Failed to remove PIN" };
             }
+        }
+
+        case "GET_PROBLEM_REPORT": {
+            return { success: true, data: await getProblemReport() };
+        }
+
+        case "CLAIM_WELCOME_GUIDE": {
+            return { success: true, data: { show: await welcomeStorage.claim() } };
         }
 
         case "SCAN_QR_FROM_PAGE": {

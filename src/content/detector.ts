@@ -2,7 +2,7 @@
  * MFA field detection algorithm.
  * Detects input fields likely asking for MFA codes.
  */
-import type { MFAFieldDetection } from "@shared/types";
+import type { MFAFieldDetection, FieldDiagnosis } from "@shared/types";
 
 /**
  * Attribute patterns that suggest MFA input (used in name/id/class).
@@ -739,4 +739,24 @@ export const getBestMFAField = (): MFAFieldDetection | null => {
     const detections = detectMFAFields();
     const best = detections.find((d) => d.confidence >= 0.5);
     return best || null;
+};
+
+const SCANNED_TYPES = new Set(["text", "tel", "number"]);
+
+export const diagnoseField = (input: HTMLInputElement): FieldDiagnosis => {
+    const best = getBestMFAField();
+    const split = detectSplitInputs();
+    const inSplitGroup = !!split?.splitInputs?.includes(input);
+    const isBestMatch = !!best && (best.element === input || !!best.splitInputs?.includes(input));
+
+    let skipped: string | null = null;
+    const type = input.getAttribute("type");
+    if (type !== null && !SCANNED_TYPES.has(input.type)) skipped = `input type "${input.type}" is not scanned`;
+    else if (!input.offsetParent) skipped = "input is hidden (no offsetParent)";
+    else if (input.readOnly || input.disabled) skipped = "input is read-only or disabled";
+
+    const excluded = isExcludedField(input);
+    const confidence = skipped ? 0 : calculateConfidence(input);
+
+    return { skipped, confidence, excluded, inSplitGroup, isBestMatch };
 };

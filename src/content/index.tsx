@@ -7,6 +7,7 @@ import { browser, sendMessage } from "@shared/browser";
 import type { AuthState, DomainMatch, ExtensionSettings, MFAFieldDetection } from "@shared/types";
 import { fillCode } from "./autofill";
 import { getBestMFAField } from "./detector";
+import { collectPageReport } from "./report";
 import { hidePopup, showPopup } from "./popup";
 import "./styles.css";
 
@@ -209,7 +210,7 @@ const handleMessage = (
     _sender: Browser.Runtime.MessageSender,
     sendResponse: (response: unknown) => void
 ): boolean => {
-    const msg = message as { type?: string; code?: string };
+    const msg = message as { type?: string; code?: string; useContextTarget?: boolean };
     if (msg.type === "FILL_OTP" && msg.code && currentDetection) {
         fillCode(currentDetection, msg.code);
         sendResponse({ success: true });
@@ -218,6 +219,9 @@ const handleMessage = (
         refreshIcon();
     } else if (msg.type === "OPEN_PICKER_AT_CONTEXT_TARGET") {
         openPickerAtContextTarget();
+    } else if (msg.type === "COLLECT_PAGE_REPORT") {
+        const target = msg.useContextTarget && contextMenuTarget?.isConnected ? contextMenuTarget : null;
+        sendResponse(collectPageReport(target));
     }
     return false;
 };
