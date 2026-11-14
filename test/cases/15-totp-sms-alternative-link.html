@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>15. Authenticator code with "Use SMS instead" link</title>
+    <link rel="stylesheet" href="_shared.css" />
+</head>
+<body>
+    <a class="back" href="../index.html">&larr; Back to index</a>
+    <h1>15. Authenticator code with "Use SMS instead" link</h1>
+    <div class="expect yes">Should show icon &mdash; SMS appears only in links/buttons for other methods</div>
+
+    <div>
+        <div>
+            <form>
+                <label for="mfa-code">Enter the code from your authenticator app</label>
+                <input type="text" id="mfa-code" name="code" inputmode="numeric" maxlength="6" autocomplete="off" />
+                <button type="submit">Verify</button>
+            </form>
+            <p>Other ways to sign in:</p>
+            <a href="#">Send a code via SMS</a>
+            <button type="button">Text me a code</button>
+        </div>
+    </div>
+
+    <p class="hint">
+        No autocomplete="one-time-code" and no "totp" in the name, so this exercises the nearby-text
+        scan ignoring links and buttons.
+    </p>
+</body>
+</html>
