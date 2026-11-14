@@ -3,6 +3,7 @@
  * Provides a unified interface for chrome.storage.local and chrome.storage.session.
  */
 import { browser } from "@shared/browser";
+import { normalizeMappingDomain } from "@shared/domain-matcher";
 import type { Code, CustomDomainMapping, ExtensionSettings, KeyAttributes, VaultTimeout } from "@shared/types";
 
 // Storage keys
@@ -431,14 +432,19 @@ export const customMappingsStorage = {
     },
 
     async addMapping(mapping: Omit<CustomDomainMapping, "createdAt">): Promise<void> {
+        const domain = normalizeMappingDomain(mapping.domain);
+        if (!domain) {
+            throw new Error("Enter a domain like example.com");
+        }
         const mappings = await this.getMappings();
         // Remove existing mapping for this domain if it exists (update case)
         const filtered = mappings.filter(
-            (m) => m.domain.toLowerCase() !== mapping.domain.toLowerCase()
+            (m) => normalizeMappingDomain(m.domain) !== domain
         );
         // Add new mapping with timestamp
         const newMapping: CustomDomainMapping = {
             ...mapping,
+            domain,
             createdAt: Date.now(),
         };
         filtered.push(newMapping);
