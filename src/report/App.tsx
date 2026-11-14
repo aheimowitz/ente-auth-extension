@@ -22,6 +22,7 @@ export const App: React.FC = () => {
     const [includeFullUrl, setIncludeFullUrl] = useState(false);
     const [editedBody, setEditedBody] = useState<string | null>(null);
     const [status, setStatus] = useState<string | null>(null);
+    const [opened, setOpened] = useState(false);
 
     useEffect(() => {
         sendMessage<{ success: boolean; data?: ProblemReport }>({ type: "GET_PROBLEM_REPORT" })
@@ -46,10 +47,13 @@ export const App: React.FC = () => {
     };
 
     const openIssue = async () => {
+        // Always copy first: if GitHub makes the user sign in, the prefilled
+        // form can be lost on the way back, and the clipboard keeps the report.
+        // (Copy before opening the tab; writing needs this page focused.)
+        const copied = await copy(body);
         const params = new URLSearchParams({ title, body });
         let url = `${NEW_ISSUE_URL}?${params}`;
         if (url.length > MAX_URL_LENGTH) {
-            const copied = await copy(body);
             url = `${NEW_ISSUE_URL}?${new URLSearchParams({
                 title,
                 body: "<!-- Paste the report Duckey copied to your clipboard here -->\n",
@@ -57,9 +61,16 @@ export const App: React.FC = () => {
             setStatus(
                 copied
                     ? "The report is too long for a link, so it's on your clipboard. Paste it into the issue."
-                    : "The report is too long for a link. Copy it from the box below and paste it into the issue."
+                    : "The report is too long for a link. Copy it from the box above and paste it into the issue."
+            );
+        } else {
+            setStatus(
+                copied
+                    ? "Opened GitHub in a new tab and copied the report. If GitHub asked you to sign in and didn't bring you back to the issue form, click Open GitHub issue again, or paste the report into a new issue."
+                    : "Opened GitHub in a new tab. If GitHub asked you to sign in and didn't bring you back to the issue form, click Open GitHub issue again."
             );
         }
+        setOpened(true);
         window.open(url, "_blank", "noopener");
     };
 
@@ -166,7 +177,7 @@ export const App: React.FC = () => {
                         Copy report
                     </button>
                     <button className="welcome-button" onClick={openIssue}>
-                        Open GitHub issue
+                        {opened ? "Open GitHub issue again" : "Open GitHub issue"}
                     </button>
                 </footer>
             </main>
