@@ -51,6 +51,28 @@ const isDetectionValid = (): boolean => {
 };
 
 /**
+ * Fill a code and submit only if "Auto-submit forms" is on. The setting is
+ * read at fill time so changing it in Settings applies without a reload. If
+ * it can't be read, the form is not submitted.
+ */
+const fillRespectingSettings = async (
+    detection: MFAFieldDetection,
+    code: string,
+    userInitiated = true
+): Promise<void> => {
+    let autoSubmit = false;
+    try {
+        const res = await sendMessageWithRetry<{ success: boolean; data?: ExtensionSettings }>({
+            type: "GET_SETTINGS",
+        });
+        autoSubmit = res?.data?.autoSubmit ?? true;
+    } catch {
+        // Settings unavailable: fill without submitting
+    }
+    fillCode(detection, code, autoSubmit, userInitiated);
+};
+
+/**
  * Send message with retry logic for MV3 service worker wake-up.
  */
 async function sendMessageWithRetry<T>(
@@ -130,7 +152,7 @@ const renderIconForCurrentDetection = async (openPicker = false): Promise<void> 
 
         showPopup(matches, timeOffset, (otp: string, userInitiated = true) => {
             if (currentDetection) {
-                fillCode(currentDetection, otp, true, userInitiated);
+                void fillRespectingSettings(currentDetection, otp, userInitiated);
             }
         }, anchorElement, autoFillSingleMatch, authState, placement, openOnShow);
     } catch (error) {
@@ -212,7 +234,7 @@ const handleMessage = (
 ): boolean => {
     const msg = message as { type?: string; code?: string; useContextTarget?: boolean };
     if (msg.type === "FILL_OTP" && msg.code && currentDetection) {
-        fillCode(currentDetection, msg.code);
+        void fillRespectingSettings(currentDetection, msg.code);
         sendResponse({ success: true });
     } else if (msg.type === "AUTH_STATE_CHANGED") {
         // Sent by the background on login / unlock / lock / logout (issue #22)
