@@ -2,7 +2,7 @@
  * Extension popup main application component.
  */
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { browser, sendMessage, openOptionsPage } from "@shared/browser";
+import { browser, getCurrentTab, sendMessage, openOptionsPage } from "@shared/browser";
 import { searchCodes } from "@shared/domain-matcher";
 import { generateOTPs } from "@shared/otp";
 import { useTheme } from "@shared/useTheme";
@@ -13,7 +13,7 @@ import {
     setPopupDraft,
     setPopupListState,
 } from "@shared/popup-draft";
-import type { AuthState, Code, CodeFormData, ParsedQRCode } from "@shared/types";
+import type { AuthState, Code, CodeFormData, DomainMatch, ParsedQRCode } from "@shared/types";
 import { CodeCard } from "./CodeCard";
 import { CodeForm } from "./CodeForm";
 
@@ -59,6 +59,26 @@ type View = "loading" | "login" | "unlock" | "codes" | "add" | "edit";
 const isPoppedOut = new URLSearchParams(window.location.search).has("popout");
 if (isPoppedOut) document.documentElement.classList.add("popped-out");
 
+// Domain matches at least this strong (exact, custom or built-in mapping,
+// partial name) are suggested at the top; weaker fuzzy matches are not
+const SITE_SUGGESTION_MIN_CONFIDENCE = 0.8;
+
+/**
+ * Hostname of the web page the popup was opened over, if any. A popped-out
+ * window has no page under it.
+ */
+const getCurrentSiteHost = async (): Promise<string | null> => {
+    if (isPoppedOut) return null;
+    try {
+        const url = (await getCurrentTab())?.url;
+        if (!url) return null;
+        const { protocol, hostname } = new URL(url);
+        return protocol === "http:" || protocol === "https:" ? hostname : null;
+    } catch {
+        return null;
+    }
+};
+
 const openPopOutWindow = async () => {
     await browser.windows.create({
         url: browser.runtime.getURL("popup/index.html?popout=1"),
@@ -85,6 +105,9 @@ export const App: React.FC = () => {
         sendMessage({ type: "SET_SETTINGS", settings: { sortOrder: order } });
     };
     const [timeOffset, setTimeOffset] = useState(0);
+    // Site the popup was opened over, and its matching codes' confidence by id
+    const [siteHost, setSiteHost] = useState<string | null>(null);
+    const [siteMatches, setSiteMatches] = useState<Map<string, number>>(new Map());
     const [password, setPassword] = useState("");
     const [pin, setPin] = useState("");
     const [usePinUnlock, setUsePinUnlock] = useState(true);
@@ -371,6 +394,37 @@ export const App: React.FC = () => {
         return () => clearInterval(interval);
     }, [view, codes, timeOffset]);
 
+    useEffect(() => {
+        getCurrentSiteHost().then(setSiteHost).catch(() => setSiteHost(null));
+    }, []);
+
+    // Match codes to the current site. Asks the background so custom domain
+    // mappings apply, as they do for the in-page autofill icon.
+    useEffect(() => {
+        if (!siteHost || codes.length === 0) {
+            setSiteMatches(new Map());
+            return;
+        }
+        let cancelled = false;
+        sendMessage<{ success: boolean; data?: { matches: DomainMatch[] } }>({
+            type: "GET_CODES_FOR_DOMAIN",
+            domain: siteHost,
+        })
+            .then((response) => {
+                if (cancelled) return;
+                const strong = (response.data?.matches ?? []).filter(
+                    (m) => m.confidence >= SITE_SUGGESTION_MIN_CONFIDENCE
+                );
+                setSiteMatches(new Map(strong.map((m) => [m.code.id, m.confidence])));
+            })
+            .catch(() => {
+                if (!cancelled) setSiteMatches(new Map());
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [siteHost, codes]);
+
     // Filter and sort codes when search query, tag, or sort order changes
     useEffect(() => {
         let result = searchQuery.trim()
@@ -384,9 +438,16 @@ export const App: React.FC = () => {
             );
         }
 
-        // Apply sorting (pinned codes always first)
+        // Apply sorting: codes for the current site, then pinned, then sort order
         result.sort((a, b) => {
-            // Pinned codes come first
+            // Strongest current-site matches come first
+            const aSite = siteMatches.get(a.id) ?? 0;
+            const bSite = siteMatches.get(b.id) ?? 0;
+            if (aSite !== bSite) {
+                return bSite - aSite;
+            }
+
+            // Pinned codes come next
             const aPinned = a.codeDisplay?.pinned ? 1 : 0;
             const bPinned = b.codeDisplay?.pinned ? 1 : 0;
             if (aPinned !== bPinned) {
@@ -408,7 +469,7 @@ export const App: React.FC = () => {
         });
 
         setFilteredCodes(result);
-    }, [searchQuery, codes, sortOrder, selectedTag]);
+    }, [searchQuery, codes, sortOrder, selectedTag, siteMatches]);
 
     // Handle unlock with password
     const handleUnlock = async () => {
@@ -1238,16 +1299,25 @@ export const App: React.FC = () => {
                         </div>
                     </div>
                 ) : (
-                    filteredCodes.map((code) => {
+                    filteredCodes.map((code, index) => {
                         const otpData = otps.get(code.id) || {
                             otp: "",
                             nextOtp: "",
                         };
                         const isExiting = exitingPinId === code.id;
                         const justMoved = recentlyPinnedId === code.id;
+                        // Site matches sort first, so they're the leading run of the list
+                        const isSiteMatch = siteMatches.has(code.id);
+                        const startsSuggestions = isSiteMatch && index === 0;
+                        const startsRest =
+                            !isSiteMatch && index > 0 && siteMatches.has(filteredCodes[index - 1]!.id);
                         return (
+                            <React.Fragment key={code.id}>
+                            {startsSuggestions && (
+                                <div className="codes-section-label">Suggested for {siteHost}</div>
+                            )}
+                            {startsRest && <div className="codes-section-label">All codes</div>}
                             <div
-                                key={code.id}
                                 className={`code-card-wrapper ${isExiting ? "exiting" : ""} ${justMoved ? "just-moved" : ""}`}
                             >
                                 <CodeCard
@@ -1259,6 +1329,7 @@ export const App: React.FC = () => {
                                     onPin={handlePinCode}
                                 />
                             </div>
+                            </React.Fragment>
                         );
                     })
                 )}
