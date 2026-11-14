@@ -34,6 +34,7 @@ export const App: React.FC = () => {
     useTheme("ente");
 
     const [step, setStep] = useState<Step>("email");
+    const [openingGuide, setOpeningGuide] = useState(false);
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [ottCode, setOttCode] = useState("");
@@ -199,7 +200,21 @@ export const App: React.FC = () => {
             throw new Error(response.error || "Login failed");
         }
 
+        // The first login on this install continues to the getting started guide
+        // in this tab instead of closing it
+        const welcome = await sendMessage<{ success: boolean; data?: { show: boolean } }>({
+            type: "CLAIM_WELCOME_GUIDE",
+        }).catch(() => undefined);
+        const showWelcome = !!welcome?.data?.show;
+        setOpeningGuide(showWelcome);
+
         setStep("success");
+        if (showWelcome) {
+            setTimeout(() => {
+                window.location.replace(browser.runtime.getURL("welcome/index.html"));
+            }, 1500);
+            return;
+        }
         // Auto-close the login tab after a short delay so the user briefly
         // sees the success state, then the popup takes over.
         // tabs.remove also works when this tab wasn't opened by script (e.g. the
@@ -1014,7 +1029,9 @@ export const App: React.FC = () => {
                         <p className="login-subtitle">
                             Signed in as <strong>{email}</strong>
                         </p>
-                        <p className="login-hint">You can close this tab.</p>
+                        <p className="login-hint">
+                            {openingGuide ? "Opening the getting started guide..." : "You can close this tab."}
+                        </p>
                     </div>
                 )}
             </div>

@@ -14,6 +14,8 @@ const KEYS = {
     SYNC_TIMESTAMP: "syncTimestamp",
     EMAIL: "email",
     CUSTOM_DOMAIN_MAPPINGS: "customDomainMappings",
+    // Set once the getting started guide has been shown (kept across logout)
+    WELCOME_SHOWN: "welcomeShown",
     // Master key storage location depends on lockOnBrowserClose setting
     MASTER_KEY: "masterKey",
     MASTER_KEY_SESSION: "masterKeySession",
@@ -457,15 +459,33 @@ export const customMappingsStorage = {
 };
 
 /**
+ * Getting started guide state.
+ */
+export const welcomeStorage = {
+    /**
+     * Returns true the first time it's called on this install, so the guide
+     * opens after the first login only.
+     */
+    async claim(): Promise<boolean> {
+        const shown = await localStore.get<boolean>(KEYS.WELCOME_SHOWN);
+        if (shown) return false;
+        await localStore.set(KEYS.WELCOME_SHOWN, true);
+        return true;
+    },
+};
+
+/**
  * Clear everything tied to the account on logout: credentials, keys, codes,
  * PIN, domain mappings and all session data. Device preferences (settings)
- * survive, so logging out doesn't reset e.g. the vault timeout to "never".
+ * survive, so logging out doesn't reset e.g. the vault timeout to "never",
+ * and so does the flag that the getting started guide was already shown.
  * Anything not explicitly kept is removed, so new account data is wiped by default.
  */
 export const clearAccountData = async (): Promise<void> => {
     await sessionStore.clear();
     const items = await browser.storage.local.get(null);
-    const keysToRemove = Object.keys(items).filter((k) => k !== KEYS.SETTINGS);
+    const keep: string[] = [KEYS.SETTINGS, KEYS.WELCOME_SHOWN];
+    const keysToRemove = Object.keys(items).filter((k) => !keep.includes(k));
     if (keysToRemove.length > 0) {
         await browser.storage.local.remove(keysToRemove);
     }

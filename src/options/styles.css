@@ -33,6 +33,21 @@ body {
     font-weight: 600;
 }
 
+.guide-link {
+    margin-left: auto;
+    padding: 6px 12px;
+    border: 1px solid var(--stroke);
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--text-primary);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.guide-link:hover {
+    background-color: var(--fill-faint);
+}
+
 .options-content {
     min-height: 400px;
 }

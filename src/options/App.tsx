@@ -2,7 +2,8 @@
  * Options page application component.
  */
 import React, { useEffect, useRef, useState, useMemo } from "react";
-import { browser, isFirefox, sendMessage } from "@shared/browser";
+import { browser, sendMessage } from "@shared/browser";
+import { NEW_ISSUE_URL, REPO_URL, getReviewUrl } from "@shared/links";
 import { applyAccent, useTheme } from "@shared/useTheme";
 import { getBuiltInMappings } from "@shared/domain-matcher";
 import type { AccentTheme, AuthState, Code, CustomDomainMapping, ExtensionSettings, ThemeMode, VaultTimeout } from "@shared/types";
@@ -20,17 +21,7 @@ const getExtensionVersion = (): string => {
     }
 };
 
-/**
- * Store page where the user can leave a review, for the browser they're using.
- * Edge has no separate reviews page; ratings are on the listing itself.
- */
-const getReviewUrl = (): string => {
-    if (isFirefox()) return "https://addons.mozilla.org/firefox/addon/duckey/reviews/";
-    if (navigator.userAgent.includes("Edg/")) {
-        return "https://microsoftedge.microsoft.com/addons/detail/duckey/ohccakbkllnfhpjlbjnbehnajdkopocl";
-    }
-    return "https://chromewebstore.google.com/detail/duckey/immpjinemfjjbjobnioeajlalbniicpl/reviews";
-};
+const WELCOME_URL = browser.runtime.getURL("welcome/index.html");
 
 export const App: React.FC = () => {
     // Initialize theme
@@ -287,6 +278,9 @@ export const App: React.FC = () => {
             <div className="options-header">
                 <Logo />
                 <h1>Duckey Settings</h1>
+                <a className="guide-link" href={WELCOME_URL} target="_blank" rel="noopener noreferrer">
+                    Getting started guide
+                </a>
             </div>
 
             <div className="options-content">
@@ -860,12 +854,24 @@ export const App: React.FC = () => {
             <div className="options-footer">
                 <p>
                     Duckey v{getExtensionVersion()} •{" "}
+                    <a href={WELCOME_URL} target="_blank" rel="noopener noreferrer">
+                        Guide
+                    </a>
+                    {" • "}
                     <a
-                        href="https://github.com/aheimowitz/ente-auth-extension"
+                        href={REPO_URL}
                         target="_blank"
                         rel="noopener noreferrer"
                     >
                         GitHub
+                    </a>
+                    {" • "}
+                    <a
+                        href={NEW_ISSUE_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        Report an issue
                     </a>
                     {" • "}
                     <a

@@ -14,7 +14,7 @@ type ResolvedTheme = "light" | "dark";
 /**
  * Get the current system color scheme preference.
  */
-const getSystemPreference = (): ResolvedTheme => {
+export const getSystemPreference = (): ResolvedTheme => {
     if (typeof window === "undefined") return "dark";
     return window.matchMedia("(prefers-color-scheme: dark)").matches
         ? "dark"
@@ -24,7 +24,7 @@ const getSystemPreference = (): ResolvedTheme => {
 /**
  * Apply theme class to document.
  */
-const applyTheme = (theme: ResolvedTheme): void => {
+export const applyTheme = (theme: ResolvedTheme): void => {
     document.documentElement.classList.remove("theme-light", "theme-dark");
     document.documentElement.classList.add(`theme-${theme}`);
 };

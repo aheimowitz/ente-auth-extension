@@ -179,7 +179,9 @@ export type ExtensionMessage =
     | { type: "CREATE_CODE"; code: CodeFormData }
     | { type: "UPDATE_CODE"; id: string; code: CodeFormData }
     | { type: "DELETE_CODE"; id: string }
-    | { type: "SCAN_QR_FROM_PAGE" };
+    | { type: "SCAN_QR_FROM_PAGE" }
+    | { type: "CLAIM_WELCOME_GUIDE" }
+    | { type: "GET_PROBLEM_REPORT" };
 
 /**
  * Response types for extension messages.
@@ -326,4 +328,79 @@ export interface TwoFactorAuthorizationResponse {
     id: number;
     keyAttributes: KeyAttributes;
     encryptedToken: string;
+}
+
+/**
+ * Why the detector did or didn't treat an input as an MFA field.
+ */
+export interface FieldDiagnosis {
+    /** Why the input was never scored, or null if it was scored */
+    skipped: string | null;
+    /** Single-input confidence (0-1); 0 when skipped or excluded */
+    confidence: number;
+    /** Whether an SMS/email/backup-code pattern excluded the field */
+    excluded: boolean;
+    /** Whether the input is one box of a detected split (one digit per box) field */
+    inSplitGroup: boolean;
+    /** Whether this input is the field Duckey would attach to */
+    isBestMatch: boolean;
+}
+
+/**
+ * Structure of an input field for a bug report. Never includes its value.
+ */
+export interface ReportedField {
+    type: string;
+    name?: string;
+    id?: string;
+    autocomplete?: string;
+    inputmode?: string;
+    maxlength?: number;
+    pattern?: string;
+    placeholder?: string;
+    ariaLabel?: string;
+    label?: string;
+    inShadowRoot: boolean;
+    diagnosis?: FieldDiagnosis;
+}
+
+/**
+ * What the content script collects for a "Report a problem" bug report.
+ */
+export interface PageReport {
+    hostname: string;
+    url: string;
+    inIframe: boolean;
+    heading?: string;
+    /** The field the user right-clicked, if any */
+    target?: ReportedField;
+    /** The field Duckey detected on its own, if any */
+    detected?: {
+        kind: "single" | "split";
+        boxes?: number;
+        confidence: number;
+        /** Omitted when it's the same as the target */
+        field?: ReportedField;
+    };
+    formInputs: {
+        scope: "form" | "page";
+        total: number;
+        fields: { type: string; autocomplete?: string; maxlength?: number }[];
+    };
+}
+
+/**
+ * A full bug report as shown on the report page.
+ */
+export interface ProblemReport {
+    source: "field" | "page";
+    createdAt: number;
+    extensionVersion: string;
+    userAgent: string;
+    /** Missing when the page can't be scripted (browser pages, store pages) */
+    page?: PageReport;
+    tabUrl?: string;
+    settings?: Pick<ExtensionSettings, "showAutofillIcon" | "autoFillSingleMatch" | "autoSubmit">;
+    /** Matches for the site; issuer names are left out */
+    matches?: { count: number; topConfidence?: number } | "locked";
 }

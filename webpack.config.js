@@ -17,6 +17,8 @@ module.exports = {
         "popup/index": "./src/popup/index.tsx",
         "options/index": "./src/options/index.tsx",
         "login/index": "./src/login/index.tsx",
+        "welcome/index": "./src/welcome/index.tsx",
+        "report/index": "./src/report/index.tsx",
     },
     output: {
         path: outputPath,
@@ -93,6 +95,16 @@ module.exports = {
             template: "./src/login/index.html",
             filename: "login/index.html",
             chunks: ["login/index"],
+        }),
+        new HtmlWebpackPlugin({
+            template: "./src/welcome/index.html",
+            filename: "welcome/index.html",
+            chunks: ["welcome/index"],
+        }),
+        new HtmlWebpackPlugin({
+            template: "./src/report/index.html",
+            filename: "report/index.html",
+            chunks: ["report/index"],
         }),
     ],
     performance: {
