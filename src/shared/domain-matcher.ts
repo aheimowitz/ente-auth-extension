@@ -70,6 +70,21 @@ const normalizeIssuer = (issuer: string): string => {
 };
 
 /**
+ * Reduce user input for a custom mapping to a bare hostname, so pasting a
+ * full URL works: "https://accounts.example.com/2fa" -> "accounts.example.com".
+ * Also strips credentials, port, a leading "*." wildcard and a trailing dot.
+ */
+export const normalizeMappingDomain = (input: string): string => {
+    let value = input.trim().toLowerCase();
+    value = value.replace(/^[a-z][a-z0-9+.-]*:\/\//, "");
+    value = value.split(/[/?#]/)[0] ?? "";
+    value = value.replace(/^.*@/, "");
+    value = value.replace(/:\d*$/, "");
+    value = value.replace(/^\*\./, "").replace(/\.$/, "");
+    return value;
+};
+
+/**
  * Check if a hostname matches a domain (exact or subdomain).
  */
 const domainMatches = (hostname: string, domain: string): boolean => {
@@ -106,9 +121,11 @@ export const matchCodesToDomain = (
         // 0. Check custom mappings FIRST (confidence: 0.99, just below exact match)
         // Custom mappings match on exact domain or subdomain
         const customMatch = customMappings.find((mapping) => {
-            const mappingDomain = mapping.domain.toLowerCase();
+            // Normalize here too, so mappings saved as full URLs before
+            // input was normalized still match
+            const mappingDomain = normalizeMappingDomain(mapping.domain);
             // Match if the hostname matches the mapping domain exactly or as subdomain
-            return domainMatches(hostname, mappingDomain) || hostname === mappingDomain;
+            return mappingDomain !== "" && domainMatches(hostname, mappingDomain);
         });
 
         if (customMatch) {
