@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>16. SMS code sent to a masked phone number (issue #69)</title>
+    <link rel="stylesheet" href="_shared.css" />
+</head>
+<body>
+    <a class="back" href="../index.html">&larr; Back to index</a>
+    <h1>16. SMS code sent to a masked phone number (issue #69)</h1>
+    <div class="expect no">Should NOT show icon &mdash; the code was sent to a phone, not from an authenticator</div>
+
+    <div class="em-cc-am-content-wrapper em-cc-la-content-wrapper">
+        <h2>Enter Your Code</h2>
+        <p>An authentication code was sent to ********8292</p>
+        <div class="row em-cc-la-fields field-group">
+            <div class="columns small-12 medium-8 large-8">
+                <div class="input">
+                    <input id="otp" name="otp" type="text" placeholder="One Time Passcode"
+                        class="masked-value otp-verify-auth-code" autocomplete="off" maxlength="6" />
+                </div>
+            </div>
+            <div class="columns small-12 medium-4 large-4">
+                <button type="submit">Submit</button>
+            </div>
+        </div>
+        <p>If you have not received the code, click here to <a href="#">resend code.</a></p>
+    </div>
+
+    <p class="hint">
+        Markup from idp.elliemae.com. Nothing on the input says SMS; the nearby text
+        "code was sent to ********8292" and "not received the code" do.
+    </p>
+</body>
+</html>

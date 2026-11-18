@@ -193,6 +193,14 @@ const OOB_LABEL_PATTERNS = [
     "we will email",
     "phone number ending",
     "ending in",
+    "was sent to",
+    "been sent to",
+    "not received the code",
+    "not received a code",
+    "haven't received",
+    "didn't receive",
+    "did not receive",
+    "resend",
 
     // Spanish
     "mensaje de texto",
@@ -219,6 +227,33 @@ const OOB_LABEL_PATTERNS = [
     "via e-mail",
     "inviato al tuo",
 ];
+
+/**
+ * A masked phone number or email address ("********8292", "(•••) •••-1234",
+ * "j***@example.com"). Pages show these when they've sent a code to that
+ * destination, which an authenticator app never needs.
+ */
+const MASKED_DESTINATION_PATTERNS = [
+    // Three or more mask characters, then the last 2-4 digits
+    /[*•●·xX]{3,}[\s\-().*•●·xX]*\d{2,4}\b/,
+    // An email whose local part or domain is masked
+    /[\w.+-]*\*{2,}[\w.+-]*@[\w*.-]+/,
+    /[\w.+-]+@\*{2,}/,
+];
+
+/**
+ * The out-of-band hint in the string: a matching OOB_LABEL_PATTERNS phrase or a
+ * masked destination. Null if there is none.
+ */
+const findOobHint = (value: string | null): string | null => {
+    const phrase = findPattern(value, OOB_LABEL_PATTERNS);
+    if (phrase || !value) return phrase;
+    for (const pattern of MASKED_DESTINATION_PATTERNS) {
+        const match = value.match(pattern);
+        if (match) return match[0].trim();
+    }
+    return null;
+};
 
 /**
  * Label/placeholder patterns that suggest MFA input.
@@ -442,16 +477,21 @@ const getExclusionReason = (input: HTMLInputElement): string | null => {
     if (nonMfa) return nonMfa;
 
     // Out-of-band delivery hints (SMS / email / voice)
+    const foundOob = (where: string, value: string | null | undefined): string | null => {
+        const match = findOobHint(value ?? null);
+        return match ? `${where} matched "${match}"` : null;
+    };
+
     const oob =
-        found("placeholder", input.placeholder, OOB_LABEL_PATTERNS) ??
-        found("aria-label", input.getAttribute("aria-label"), OOB_LABEL_PATTERNS) ??
-        found("label", inputLabel?.textContent, OOB_LABEL_PATTERNS);
+        foundOob("placeholder", input.placeholder) ??
+        foundOob("aria-label", input.getAttribute("aria-label")) ??
+        foundOob("label", inputLabel?.textContent);
     if (oob) return oob;
 
     const oobDescribedById = input.getAttribute("aria-describedby");
     if (oobDescribedById) {
         const describedBy = document.getElementById(oobDescribedById);
-        const described = found("aria-describedby text", describedBy?.textContent, OOB_LABEL_PATTERNS);
+        const described = foundOob("aria-describedby text", describedBy?.textContent);
         if (described) return described;
     }
 
@@ -465,10 +505,9 @@ const getExclusionReason = (input: HTMLInputElement): string | null => {
     if (input.autocomplete !== "one-time-code" && !namesTotp) {
         let oobAncestor: HTMLElement | null = input.parentElement;
         for (let depth = 0; depth < 4 && oobAncestor && oobAncestor !== document.body; depth++) {
-            const nearby = found(
+            const nearby = foundOob(
                 `text ${depth + 1} level${depth ? "s" : ""} up`,
-                getProseText(oobAncestor, 500),
-                OOB_LABEL_PATTERNS
+                getProseText(oobAncestor, 500)
             );
             if (nearby) return nearby;
             oobAncestor = oobAncestor.parentElement;
