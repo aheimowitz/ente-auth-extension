@@ -683,12 +683,26 @@ const findLabelForInput = (input: HTMLInputElement): HTMLLabelElement | null => 
 };
 
 /**
+ * Input types that can hold a typed code.
+ */
+const SCANNED_TYPES = new Set(["text", "tel", "number"]);
+
+/**
+ * Inputs matching the selector whose type is text, tel or number. Checks the
+ * type property rather than the attribute, so a missing or invalid type
+ * attribute (login.siteground.com uses type="input", issue #73) counts as
+ * the text input the browser renders it as.
+ */
+const getScannedInputs = (selector: string): HTMLInputElement[] =>
+    Array.from(document.querySelectorAll<HTMLInputElement>(selector)).filter((input) =>
+        SCANNED_TYPES.has(input.type)
+    );
+
+/**
  * Detect split OTP inputs (6 adjacent single-character inputs).
  */
 const detectSplitInputs = (): MFAFieldDetection | null => {
-    const allInputs = document.querySelectorAll<HTMLInputElement>(
-        'input[maxlength="1"][type="text"], input[maxlength="1"][type="tel"], input[maxlength="1"][type="number"], input[maxlength="1"]:not([type])'
-    );
+    const allInputs = getScannedInputs('input[maxlength="1"]');
 
     // Find groups of 6 adjacent inputs
     const groups: HTMLInputElement[][] = [];
@@ -756,9 +770,7 @@ export const detectMFAFields = (): MFAFieldDetection[] => {
     }
 
     // Then check single inputs
-    const inputs = document.querySelectorAll<HTMLInputElement>(
-        'input[type="text"], input[type="tel"], input[type="number"], input:not([type])'
-    );
+    const inputs = getScannedInputs("input");
 
     inputs.forEach((input) => {
         // Skip hidden inputs
@@ -807,8 +819,6 @@ export const getBestMFAField = (): MFAFieldDetection | null => {
     return best || null;
 };
 
-const SCANNED_TYPES = new Set(["text", "tel", "number"]);
-
 export const diagnoseField = (input: HTMLInputElement): FieldDiagnosis => {
     const best = getBestMFAField();
     const split = detectSplitInputs();
@@ -816,8 +826,7 @@ export const diagnoseField = (input: HTMLInputElement): FieldDiagnosis => {
     const isBestMatch = !!best && (best.element === input || !!best.splitInputs?.includes(input));
 
     let skipped: string | null = null;
-    const type = input.getAttribute("type");
-    if (type !== null && !SCANNED_TYPES.has(input.type)) skipped = `input type "${input.type}" is not scanned`;
+    if (!SCANNED_TYPES.has(input.type)) skipped = `input type "${input.type}" is not scanned`;
     else if (!input.offsetParent) skipped = "input is hidden (no offsetParent)";
     else if (input.readOnly || input.disabled) skipped = "input is read-only or disabled";
 

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8" />
+    <title>18. 2FA field with an invalid type="input" (issue #73)</title>
+    <link rel="stylesheet" href="_shared.css" />
+</head>
+<body>
+    <a class="back" href="../index.html">&larr; Back to index</a>
+    <h1>18. 2FA field with an invalid type="input" (issue #73)</h1>
+    <div class="expect yes">Should show icon &mdash; the browser treats type="input" as a text input</div>
+
+    <h2>Verifica a 2 fattori</h2>
+    <form>
+        <div class="sg-grid sg-grid--gap-large sg-grid--align-self-stretch sg-grid--autoflow-row">
+            <label class="sg-field-label">
+                Codice di verifica
+                <span class="sg-field-wrapper sg-field-wrapper--large">
+                    <input class="sg-input sg-field" data-e2e="form-field" data-component="input" tabindex="0"
+                        autocomplete="off" type="input" name="two_factor_code" />
+                </span>
+            </label>
+        </div>
+        <button type="submit">Conferma</button>
+    </form>
+
+    <p class="hint">
+        Markup from login.siteground.com/two-step-verification. The detector used to
+        select inputs by their type attribute, so it skipped this field entirely.
+    </p>
+</body>
+</html>
