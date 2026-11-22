@@ -229,6 +229,17 @@ const OOB_LABEL_PATTERNS = [
 ];
 
 /**
+ * EXCLUSION_PATTERNS for the id/class of the form around the input. Leaves out
+ * "signup": template class names like "form-signup" get reused for login and
+ * 2FA forms (accounts.hetzner.com's 2FA form is form#otp_form.form-signup),
+ * and a code typed during sign-up is often the authenticator code that
+ * confirms 2FA setup anyway.
+ */
+const CONTAINER_EXCLUSION_PATTERNS = EXCLUSION_PATTERNS.filter(
+    (pattern) => pattern !== "signup" && pattern !== "sign-up"
+);
+
+/**
  * A masked phone number or email address ("********8292", "(•••) •••-1234",
  * "j***@example.com"). Pages show these when they've sent a code to that
  * destination, which an authenticator app never needs.
@@ -473,7 +484,7 @@ const getExclusionReason = (input: HTMLInputElement): string | null => {
     const nonMfa =
         found("field attributes (name, id, class, placeholder, aria-label, data-*)", inputText, EXCLUSION_PATTERNS) ??
         found("label", inputLabel?.textContent, EXCLUSION_PATTERNS) ??
-        found("container id/class", containerText, EXCLUSION_PATTERNS);
+        found("container id/class", containerText, CONTAINER_EXCLUSION_PATTERNS);
     if (nonMfa) return nonMfa;
 
     // Out-of-band delivery hints (SMS / email / voice)

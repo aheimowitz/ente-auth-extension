@@ -16,10 +16,29 @@ import type { Code, CodeFormData } from "@shared/types";
 import { getToken, getMasterKey, isUnlocked } from "./auth";
 import { codesStorage, settingsStorage } from "./storage";
 
+// The sync currently running, if any. getCodes joins it instead of starting a
+// second network fetch (e.g. the popup's GET_CODES right after UNLOCK, which
+// already kicked off a sync). syncCodes itself always fetches fresh, since
+// callers after an add/edit/delete need data that includes their change.
+let inFlightSync: Promise<Code[]> | null = null;
+
 /**
  * Sync codes from remote.
  */
-export const syncCodes = async (): Promise<Code[]> => {
+export const syncCodes = (): Promise<Code[]> => {
+    const run = doSyncCodes();
+    inFlightSync = run;
+    const clear = () => {
+        if (inFlightSync === run) inFlightSync = null;
+    };
+    run.then(clear, clear);
+    return run;
+};
+
+/** Join a sync already in progress, or start one. */
+const syncOrJoin = (): Promise<Code[]> => inFlightSync ?? syncCodes();
+
+const doSyncCodes = async (): Promise<Code[]> => {
     const token = await getToken();
     const masterKey = await getMasterKey();
 
@@ -68,7 +87,7 @@ export const getCodes = async (forceSync = false): Promise<Code[]> => {
 
     if (needsSync) {
         try {
-            return await syncCodes();
+            return await syncOrJoin();
         } catch {
             // Fall back to cached codes if sync fails
             const cached = await codesStorage.getCodes();
@@ -83,7 +102,7 @@ export const getCodes = async (forceSync = false): Promise<Code[]> => {
     // auth state before sync completes
     if (!cached || cached.length === 0) {
         try {
-            return await syncCodes();
+            return await syncOrJoin();
         } catch {
             return [];
         }

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>17. 2FA form with a "form-signup" class (issue #72)</title>
+    <link rel="stylesheet" href="_shared.css" />
+</head>
+<body>
+    <a class="back" href="../index.html">&larr; Back to index</a>
+    <h1>17. 2FA form with a "form-signup" class (issue #72)</h1>
+    <div class="expect yes">Should show icon &mdash; this is a login 2FA form that reuses a sign-up template class</div>
+
+    <div class="registry-container">
+        <div id="2-factor" class="position-relative">
+            <h2>Two-factor Authentication Code</h2>
+            <form id="otp_form" class="form-signup auth-form-container">
+                <label for="_auth_code">OTP*</label>
+                <span class="input-wrapper">
+                    <input data-parsley-trigger="focusout" data-parsley-required-message="Field is required!"
+                        type="text" name="_auth_code" autocomplete="one-time-code" class="custom-input"
+                        id="_auth_code" required />
+                </span>
+                <button type="submit">Login</button>
+            </form>
+        </div>
+    </div>
+
+    <p class="hint">
+        Markup from accounts.hetzner.com/2fa. The form's class "form-signup" used to
+        exclude the field as a sign-up code.
+    </p>
+</body>
+</html>
