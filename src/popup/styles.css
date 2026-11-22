@@ -554,6 +554,37 @@ html.popped-out body {
     cursor: not-allowed;
 }
 
+/* Greyed out like any disabled button, plus a spinner */
+.auth-button.busy {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    cursor: progress;
+}
+
+/* Drawn in the button's text color, so it follows the disabled grey */
+.button-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid transparent;
+    border-color: color-mix(in srgb, currentColor 30%, transparent);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: buttonSpin 0.7s linear infinite;
+    flex-shrink: 0;
+}
+
+@keyframes buttonSpin {
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .button-spinner {
+        animation-duration: 2s;
+    }
+}
+
 .auth-error {
     color: var(--error-red);
     font-size: 13px;

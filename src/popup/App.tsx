@@ -114,6 +114,8 @@ export const App: React.FC = () => {
     const [hasPIN, setHasPIN] = useState(false);
     const [pinRequiresPassword, setPinRequiresPassword] = useState(false);
     const [unlocking, setUnlocking] = useState(false);
+    // What the unlock button says while busy: deriving the key, then fetching codes
+    const [unlockStatus, setUnlockStatus] = useState("Unlocking...");
     const [error, setError] = useState<string | null>(null);
     const [syncing, setSyncing] = useState(false);
     const [loggingIn, setLoggingIn] = useState(false);
@@ -476,6 +478,7 @@ export const App: React.FC = () => {
         if (!password.trim()) return;
 
         setError(null);
+        setUnlockStatus("Unlocking...");
         setUnlocking(true);
         try {
             const response = await sendMessage<{
@@ -487,9 +490,12 @@ export const App: React.FC = () => {
             });
 
             if (response.success) {
-                setPassword("");
+                // Keep the form busy until the codes are on screen; clearing it
+                // first leaves a half-reset form visible while codes load
+                setUnlockStatus("Loading codes...");
                 await loadCodes();
                 setView("codes");
+                setPassword("");
             } else {
                 setError(response.error || "Invalid password");
             }
@@ -505,6 +511,7 @@ export const App: React.FC = () => {
         if (!pin.trim()) return;
 
         setError(null);
+        setUnlockStatus("Unlocking...");
         setUnlocking(true);
         try {
             const response = await sendMessage<{
@@ -517,9 +524,10 @@ export const App: React.FC = () => {
             });
 
             if (response.success) {
-                setPin("");
+                setUnlockStatus("Loading codes...");
                 await loadCodes();
                 setView("codes");
+                setPin("");
             } else {
                 setPin("");
                 setError(response.error || "Incorrect PIN");
@@ -1049,13 +1057,20 @@ export const App: React.FC = () => {
                                     onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
                                     autoFocus
                                     autoComplete="off"
+                                    readOnly={unlocking}
                                 />
                                 <button
                                     type="submit"
-                                    className="auth-button"
+                                    className={`auth-button${unlocking ? " busy" : ""}`}
                                     disabled={!pin.trim() || unlocking}
+                                    aria-busy={unlocking}
                                 >
-                                    {unlocking ? "Unlocking..." : "Unlock"}
+                                    {unlocking ? (
+                                        <>
+                                            <span className="button-spinner" aria-hidden="true" />
+                                            {unlockStatus}
+                                        </>
+                                    ) : "Unlock"}
                                 </button>
                                 {error && <div className="auth-error">{error}</div>}
                             </form>
@@ -1087,13 +1102,20 @@ export const App: React.FC = () => {
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     autoFocus
+                                    readOnly={unlocking}
                                 />
                                 <button
                                     type="submit"
-                                    className="auth-button"
+                                    className={`auth-button${unlocking ? " busy" : ""}`}
                                     disabled={!password.trim() || unlocking}
+                                    aria-busy={unlocking}
                                 >
-                                    {unlocking ? "Unlocking..." : "Unlock"}
+                                    {unlocking ? (
+                                        <>
+                                            <span className="button-spinner" aria-hidden="true" />
+                                            {unlockStatus}
+                                        </>
+                                    ) : "Unlock"}
                                 </button>
                                 {error && <div className="auth-error">{error}</div>}
                             </form>
