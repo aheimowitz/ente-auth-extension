@@ -21,15 +21,28 @@ const hostnameOf = (url: string | undefined): string | undefined => {
     }
 };
 
+/**
+ * Which field the page report describes besides the detected one: the
+ * right-clicked input, the input a detection-problem prompt is about, or none.
+ */
+type ReportTarget = "context" | "prompt" | "none";
+
+const reportTargetFor = (source: ProblemReport["source"]): ReportTarget =>
+    source === "field"
+        ? "context"
+        : source === "missed-field" || source === "wrong-field"
+          ? "prompt"
+          : "none";
+
 const collectFromPage = async (
     tabId: number,
-    useContextTarget: boolean,
+    target: ReportTarget,
     frameId: number
 ): Promise<PageReport | undefined> => {
     try {
         return (await browser.tabs.sendMessage(
             tabId,
-            { type: "COLLECT_PAGE_REPORT", useContextTarget },
+            { type: "COLLECT_PAGE_REPORT", target },
             { frameId }
         )) as PageReport;
     } catch {
@@ -44,10 +57,11 @@ export const startProblemReport = async (
 ): Promise<void> => {
     let page: PageReport | undefined;
     if (tab?.id !== undefined) {
-        page = await collectFromPage(tab.id, source === "field", source === "field" ? frameId ?? 0 : 0);
+        const target = reportTargetFor(source);
+        page = await collectFromPage(tab.id, target, target === "none" ? 0 : frameId ?? 0);
         // The content script only runs in the top frame; for a field inside an
         // iframe, fall back to the top frame's view of the page
-        if (!page && frameId) page = await collectFromPage(tab.id, false, 0);
+        if (!page && frameId) page = await collectFromPage(tab.id, "none", 0);
     }
 
     const settings = await settingsStorage.getSettings();

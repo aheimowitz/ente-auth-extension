@@ -73,12 +73,14 @@ const fieldTable = (field: ReportedField): string => {
 
 export const formatTitle = (report: ProblemReport): string => {
     const host = report.page?.hostname ?? (report.tabUrl ? safeHost(report.tabUrl) : undefined);
-    const what =
-        report.source === "field"
-            ? "Field not filled"
-            : report.source === "auto-fill-loop"
-              ? "Wrong field auto-filled"
-              : "Autofill problem";
+    const titles: Record<ProblemReport["source"], string> = {
+        field: "Field not filled",
+        page: "Autofill problem",
+        "auto-fill-loop": "Wrong field auto-filled",
+        "missed-field": "Code field not detected",
+        "wrong-field": "Wrong field detected",
+    };
+    const what = titles[report.source];
     return host ? `${what} on ${host}` : what;
 };
 
@@ -100,9 +102,13 @@ export const formatBody = (
     const out: string[] = [];
 
     out.push("### What happened", description.trim() || "_No description given._", "");
-    if (report.source === "auto-fill-loop") {
-        out.push("_Duckey kept auto-filling the detected field on this page and paused auto-fill._", "");
-    }
+    const autoNotes: Partial<Record<ProblemReport["source"], string>> = {
+        "auto-fill-loop": "Duckey kept auto-filling the detected field on this page and paused auto-fill.",
+        "missed-field": "I entered a code in a field Duckey didn't detect.",
+        "wrong-field": "Duckey filled a code into a field that I then filled with something else.",
+    };
+    const autoNote = autoNotes[report.source];
+    if (autoNote) out.push(`_${autoNote}_`, "");
 
     out.push("### Site");
     out.push(host ? `\`${host}\`` : "_Unknown_");
@@ -136,7 +142,13 @@ export const formatBody = (
     }
 
     if (page.target) {
-        out.push("### Field I right-clicked", fieldTable(page.target), "");
+        const targetHeading =
+            report.source === "missed-field"
+                ? "Field I entered the code in"
+                : report.source === "wrong-field"
+                  ? "Field Duckey filled"
+                  : "Field I right-clicked";
+        out.push(`### ${targetHeading}`, fieldTable(page.target), "");
     }
 
     out.push("### Field Duckey detected");

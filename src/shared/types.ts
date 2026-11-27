@@ -102,6 +102,12 @@ export interface ExtensionSettings {
     accountsUrl: string;
     /** Sort order for codes list. Default: "issuer" */
     sortOrder: "issuer" | "account" | "recent";
+    /**
+     * Offer to report a field when Duckey seems to have missed it or picked
+     * the wrong one (checked on the device; nothing is sent unless the user
+     * reports). Default: true
+     */
+    suggestDetectionReports: boolean;
 }
 
 /**
@@ -119,6 +125,7 @@ export const defaultSettings: ExtensionSettings = {
     serverUrl: "",
     accountsUrl: "",
     sortOrder: "issuer",
+    suggestDetectionReports: true,
 };
 
 /**
@@ -182,7 +189,8 @@ export type ExtensionMessage =
     | { type: "SCAN_QR_FROM_PAGE" }
     | { type: "CLAIM_WELCOME_GUIDE" }
     | { type: "GET_PROBLEM_REPORT" }
-    | { type: "REPORT_AUTO_FILL_LOOP" };
+    | { type: "REPORT_DETECTION_PROBLEM"; source: DetectionProblem }
+    | { type: "IS_OWN_CODE"; value: string };
 
 /**
  * Response types for extension messages.
@@ -379,7 +387,7 @@ export interface PageReport {
     url: string;
     inIframe: boolean;
     heading?: string;
-    /** The field the user right-clicked, if any */
+    /** The field the user right-clicked, or the one a detection-problem prompt is about */
     target?: ReportedField;
     /** The field Duckey detected on its own, if any */
     detected?: {
@@ -399,9 +407,17 @@ export interface PageReport {
 /**
  * A full bug report as shown on the report page.
  */
+/**
+ * Detection problems Duckey notices on its own and offers to report:
+ * - "auto-fill-loop": auto-fill was paused after filling the same field repeatedly
+ * - "missed-field": the user entered one of their codes in a field Duckey didn't detect
+ * - "wrong-field": Duckey's code went into a field the user then filled with something else
+ */
+export type DetectionProblem = "auto-fill-loop" | "missed-field" | "wrong-field";
+
 export interface ProblemReport {
-    /** "auto-fill-loop": started from the prompt shown when auto-fill was paused */
-    source: "field" | "page" | "auto-fill-loop";
+    /** "field" / "page": started from the right-click menu */
+    source: "field" | "page" | DetectionProblem;
     createdAt: number;
     extensionVersion: string;
     userAgent: string;

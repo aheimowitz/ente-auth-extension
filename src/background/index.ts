@@ -17,6 +17,7 @@ import { settingsStorage, authStorage, customMappingsStorage, welcomeStorage } f
 import { getCodes, getTimeOffset, syncCodes, createCode, updateCode, deleteCode } from "./sync";
 import { scanQRFromPage } from "./qr-scanner";
 import { getProblemReport, startProblemReport } from "./report";
+import { isOwnCode } from "./own-code";
 
 const SYNC_ALARM_NAME = "ente-auth-sync";
 
@@ -541,10 +542,15 @@ const handleMessage = async (
             }
         }
 
-        case "REPORT_AUTO_FILL_LOOP": {
-            // From the content script's "report this field" prompt; the page
-            // report describes the field Duckey detected and kept filling
-            await startProblemReport(sender.tab, "auto-fill-loop", sender.frameId);
+        case "IS_OWN_CODE": {
+            // Answers only yes / no / can't tell, so secrets stay in the background
+            return { success: true, data: { matched: await isOwnCode(message.value) } };
+        }
+
+        case "REPORT_DETECTION_PROBLEM": {
+            // From a content-script prompt offering to report a field Duckey
+            // missed, picked wrongly, or kept filling
+            await startProblemReport(sender.tab, message.source, sender.frameId);
             return { success: true };
         }
 

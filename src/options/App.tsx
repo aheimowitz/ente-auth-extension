@@ -381,6 +381,26 @@ export const App: React.FC = () => {
                             <span className="toggle-slider"></span>
                         </label>
                     </div>
+
+                    <div className="setting-item">
+                        <div className="setting-info">
+                            <label>Suggest reporting detection problems</label>
+                            <p>
+                                When Duckey seems to miss a code field or pick the wrong one, offer to report it.
+                                Duckey checks this on your device and sends nothing unless you choose to report.
+                            </p>
+                        </div>
+                        <label className="toggle">
+                            <input
+                                type="checkbox"
+                                checked={settings.suggestDetectionReports}
+                                onChange={() =>
+                                    handleToggle("suggestDetectionReports")
+                                }
+                            />
+                            <span className="toggle-slider"></span>
+                        </label>
+                    </div>
                 </section>
 
                 <section className="settings-section">

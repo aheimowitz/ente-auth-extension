@@ -8,7 +8,8 @@ import type { AuthState, DomainMatch, ExtensionSettings, MFAFieldDetection } fro
 import { canAutoFill, fillCode, recordAutoFill } from "./autofill";
 import { getBestMFAField } from "./detector";
 import { collectPageReport } from "./report";
-import { hidePopup, showPopup } from "./popup";
+import { getSuggestionTarget, noteDuckeyFill, startMissDetection } from "./missDetector";
+import { hidePopup, hideReportSuggestion, showPopup } from "./popup";
 import "./styles.css";
 
 let currentDetection: MFAFieldDetection | null = null;
@@ -28,6 +29,7 @@ let pendingPickerOpen = false;
  */
 const resetState = (): void => {
     hidePopup();
+    hideReportSuggestion();
     hasShownPopup = false;
     currentDetection = null;
     pendingPickerOpen = false;
@@ -70,6 +72,7 @@ const fillRespectingSettings = async (
         // Settings unavailable: fill without submitting
     }
     fillCode(detection, code, autoSubmit, userInitiated);
+    noteDuckeyFill(detection);
 };
 
 /**
@@ -155,7 +158,12 @@ const renderIconForCurrentDetection = async (openPicker = false): Promise<void> 
             // Cap automatic fills so a wrongly detected field isn't refilled forever
             if (!userInitiated && !recordAutoFill()) return;
             void fillRespectingSettings(currentDetection, otp, userInitiated);
-        }, anchorElement, autoFillSingleMatch, authState, placement, openOnShow, !canAutoFill());
+        }, anchorElement, autoFillSingleMatch, authState, {
+            placement,
+            openOnShow,
+            autoFillPaused: !canAutoFill(),
+            suggestReports: settings?.suggestDetectionReports ?? true,
+        });
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         if (errorMessage.includes("Could not establish connection") ||
@@ -233,7 +241,7 @@ const handleMessage = (
     _sender: Browser.Runtime.MessageSender,
     sendResponse: (response: unknown) => void
 ): boolean => {
-    const msg = message as { type?: string; code?: string; useContextTarget?: boolean };
+    const msg = message as { type?: string; code?: string; target?: "context" | "prompt" | "none" };
     if (msg.type === "FILL_OTP" && msg.code && currentDetection) {
         void fillRespectingSettings(currentDetection, msg.code);
         sendResponse({ success: true });
@@ -243,7 +251,12 @@ const handleMessage = (
     } else if (msg.type === "OPEN_PICKER_AT_CONTEXT_TARGET") {
         openPickerAtContextTarget();
     } else if (msg.type === "COLLECT_PAGE_REPORT") {
-        const target = msg.useContextTarget && contextMenuTarget?.isConnected ? contextMenuTarget : null;
+        const target =
+            msg.target === "context"
+                ? contextMenuTarget?.isConnected ? contextMenuTarget : null
+                : msg.target === "prompt"
+                  ? getSuggestionTarget()
+                  : null;
         sendResponse(collectPageReport(target));
     }
     return false;
@@ -284,6 +297,9 @@ const init = (): void => {
     } catch (e) {
         console.warn("[Ente Auth] storage.onChanged listener unavailable:", e);
     }
+
+    // Offer to report fields Duckey missed or picked wrongly
+    startMissDetection(() => currentDetection);
 
     // Initial check
     debouncedCheck();
