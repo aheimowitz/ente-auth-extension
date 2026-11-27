@@ -541,6 +541,13 @@ const handleMessage = async (
             }
         }
 
+        case "REPORT_AUTO_FILL_LOOP": {
+            // From the content script's "report this field" prompt; the page
+            // report describes the field Duckey detected and kept filling
+            await startProblemReport(sender.tab, "auto-fill-loop", sender.frameId);
+            return { success: true };
+        }
+
         case "GET_PROBLEM_REPORT": {
             return { success: true, data: await getProblemReport() };
         }

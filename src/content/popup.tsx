@@ -11,6 +11,7 @@ import { ACCENT_COLORS, getResolvedAccentColor, getResolvedTheme } from "@shared
 import { renderDuckeyIconDataUrl } from "@shared/icon";
 import { browser, sendMessage } from "@shared/browser";
 import type { AuthState, Code, DomainMatch } from "@shared/types";
+import { dismissReportPrompt, isReportPromptDismissed } from "./autofill";
 
 type ResolvedTheme = "light" | "dark";
 
@@ -752,6 +753,136 @@ const AuthPromptDropdown: React.FC<AuthPromptDropdownProps> = ({
     );
 };
 
+interface AutoFillPausedPromptProps {
+    onClose: () => void;
+    theme: ResolvedTheme;
+    accentColor: string;
+}
+
+/**
+ * Shown once auto-fill is paused on a site after repeated automatic fills,
+ * which usually means Duckey picked the wrong field. Offers to open the
+ * "Report a problem" page for the detected field.
+ */
+const AutoFillPausedPrompt: React.FC<AutoFillPausedPromptProps> = ({ onClose, theme, accentColor }) => {
+    const promptRef = useRef<HTMLDivElement>(null);
+
+    // Close on outside click
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            const prompt = promptRef.current;
+            if (!prompt) return;
+            // The shadow root is closed, so clicks inside it reach the document
+            // retargeted to its host; those aren't outside clicks
+            const host = (prompt.getRootNode() as ShadowRoot).host;
+            if (e.target !== host && !prompt.contains(e.target as Node)) {
+                onClose();
+            }
+        };
+        const timeoutId = setTimeout(() => {
+            document.addEventListener("mousedown", handleClickOutside, false);
+        }, 100);
+        return () => {
+            clearTimeout(timeoutId);
+            document.removeEventListener("mousedown", handleClickOutside, false);
+        };
+    }, [onClose]);
+
+    const colors = { ...themeColors[theme], accent: accentColor };
+
+    const styles: Record<string, React.CSSProperties> = {
+        prompt: {
+            position: "absolute",
+            top: "100%",
+            right: 0,
+            marginTop: "4px",
+            width: "280px",
+            padding: "14px 16px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "12px",
+            backgroundColor: colors.background,
+            borderRadius: "8px",
+            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
+            border: `1px solid ${colors.stroke}`,
+            zIndex: 2147483647,
+            fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        },
+        title: {
+            fontSize: "14px",
+            fontWeight: 600,
+            color: colors.textPrimary,
+            margin: 0,
+        },
+        message: {
+            fontSize: "13px",
+            color: colors.textMuted,
+            lineHeight: 1.45,
+            margin: 0,
+        },
+        actions: {
+            display: "flex",
+            gap: "8px",
+        },
+        primary: {
+            flex: 1,
+            padding: "8px 12px",
+            fontSize: "13px",
+            fontWeight: 600,
+            color: "#FFFFFF",
+            backgroundColor: colors.accent,
+            border: "none",
+            borderRadius: "6px",
+            cursor: "pointer",
+        },
+        secondary: {
+            padding: "8px 12px",
+            fontSize: "13px",
+            fontWeight: 500,
+            color: colors.textPrimary,
+            backgroundColor: "transparent",
+            border: `1px solid ${colors.stroke}`,
+            borderRadius: "6px",
+            cursor: "pointer",
+        },
+    };
+
+    return (
+        <div ref={promptRef} style={styles.prompt}>
+            <p style={styles.title}>Auto-fill paused</p>
+            <p style={styles.message}>
+                Duckey filled this field several times in a row, so it may be the wrong field. Click the
+                icon to fill a code yourself, or report the field so detection can be fixed.
+            </p>
+            <div style={styles.actions}>
+                <button
+                    type="button"
+                    style={styles.primary}
+                    onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        sendMessage({ type: "REPORT_AUTO_FILL_LOOP" }).catch(() => {});
+                        onClose();
+                    }}
+                >
+                    Report this field
+                </button>
+                <button
+                    type="button"
+                    style={styles.secondary}
+                    onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onClose();
+                    }}
+                >
+                    Not now
+                </button>
+            </div>
+        </div>
+    );
+};
+
 interface AutofillIconProps {
     matches: DomainMatch[];
     timeOffset: number;
@@ -761,6 +892,7 @@ interface AutofillIconProps {
     domain: string;
     authState?: AuthState;
     openOnShow?: boolean;
+    autoFillPaused?: boolean;
 }
 
 const AutofillIcon: React.FC<AutofillIconProps> = ({
@@ -772,11 +904,17 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
     domain,
     authState,
     openOnShow = false,
+    autoFillPaused = false,
 }) => {
     // Treat unknown auth state as authenticated so we never block on a missing field.
     const isAuthenticated = !authState || (authState.isLoggedIn && authState.isUnlocked);
     const needsLogin = !!authState && !authState.isLoggedIn;
+    // A lone match gets filled without asking (paused after repeated automatic fills)
+    const willAutoFill =
+        isAuthenticated && autoFillSingleMatch && !autoFillPaused && matches.length === 1;
 
+    // While paused, a lone match keeps the dropdown closed like it would when
+    // auto-filling, so a wrongly detected field doesn't keep popping it open
     const shouldAutoOpenDropdown =
         isAuthenticated &&
         !(autoFillSingleMatch && matches.length === 1) &&
@@ -784,10 +922,23 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
     // openOnShow (explicit request, e.g. the context menu) opens even with no
     // matches or a locked vault; a lone match is still filled directly if allowed
     const [isOpen, setIsOpen] = useState(() =>
-        openOnShow
-            ? !(isAuthenticated && autoFillSingleMatch && matches.length === 1)
-            : shouldAutoOpenDropdown
+        openOnShow ? !willAutoFill : shouldAutoOpenDropdown
     );
+    // Auto-fill would have filled a lone match but is paused: suggest a report
+    const [showPausedPrompt, setShowPausedPrompt] = useState(
+        () =>
+            !openOnShow &&
+            isAuthenticated &&
+            autoFillSingleMatch &&
+            autoFillPaused &&
+            matches.length === 1 &&
+            !isReportPromptDismissed()
+    );
+    const closePausedPrompt = useCallback(() => {
+        // Any answer (report, not now, click away) counts, so it isn't shown again
+        dismissReportPrompt();
+        setShowPausedPrompt(false);
+    }, []);
     const [theme, setTheme] = useState<ResolvedTheme>("dark");
     const [accentColor, setAccentColor] = useState(ACCENT_COLORS.duckey);
     // Packaged icon for the default accent, otherwise draw it in the user's color
@@ -808,7 +959,7 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
 
     // Auto-fill if single match and setting enabled
     useEffect(() => {
-        if (isAuthenticated && autoFillSingleMatch && matches.length === 1) {
+        if (willAutoFill) {
             const { code } = matches[0]!;
             const [otp] = generateOTPs(code, timeOffset);
             // Small delay to let the UI render
@@ -816,11 +967,12 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
                 onFill(otp, false);
             }, 100);
         }
-    }, [matches, timeOffset, onFill, autoFillSingleMatch, isAuthenticated]);
+    }, [matches, timeOffset, onFill, willAutoFill]);
 
     const handleIconClick = (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
+        if (showPausedPrompt) closePausedPrompt();
         setIsOpen(!isOpen);
     };
 
@@ -898,6 +1050,9 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
                     domain={domain}
                 />
             )}
+            {showPausedPrompt && !isOpen && (
+                <AutoFillPausedPrompt onClose={closePausedPrompt} theme={theme} accentColor={accentColor} />
+            )}
             {isOpen && !isAuthenticated && (
                 <AuthPromptDropdown
                     needsLogin={needsLogin}
@@ -960,7 +1115,8 @@ export const showPopup = (
     autoFillSingleMatch = true,
     authState?: AuthState,
     placement: "inside" | "outside" = "inside",
-    openOnShow = false
+    openOnShow = false,
+    autoFillPaused = false
 ): void => {
     // Remove existing icon
     hidePopup();
@@ -993,6 +1149,7 @@ export const showPopup = (
             domain={domain}
             authState={authState}
             openOnShow={openOnShow}
+            autoFillPaused={autoFillPaused}
         />
     );
 

@@ -5,7 +5,7 @@
 import type Browser from "webextension-polyfill";
 import { browser, sendMessage } from "@shared/browser";
 import type { AuthState, DomainMatch, ExtensionSettings, MFAFieldDetection } from "@shared/types";
-import { fillCode } from "./autofill";
+import { canAutoFill, fillCode, recordAutoFill } from "./autofill";
 import { getBestMFAField } from "./detector";
 import { collectPageReport } from "./report";
 import { hidePopup, showPopup } from "./popup";
@@ -151,10 +151,11 @@ const renderIconForCurrentDetection = async (openPicker = false): Promise<void> 
         const placement: "inside" | "outside" = isSplit ? "outside" : "inside";
 
         showPopup(matches, timeOffset, (otp: string, userInitiated = true) => {
-            if (currentDetection) {
-                void fillRespectingSettings(currentDetection, otp, userInitiated);
-            }
-        }, anchorElement, autoFillSingleMatch, authState, placement, openOnShow);
+            if (!currentDetection) return;
+            // Cap automatic fills so a wrongly detected field isn't refilled forever
+            if (!userInitiated && !recordAutoFill()) return;
+            void fillRespectingSettings(currentDetection, otp, userInitiated);
+        }, anchorElement, autoFillSingleMatch, authState, placement, openOnShow, !canAutoFill());
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         if (errorMessage.includes("Could not establish connection") ||
