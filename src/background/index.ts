@@ -18,6 +18,22 @@ import { getCodes, getTimeOffset, syncCodes, createCode, updateCode, deleteCode 
 import { scanQRFromPage } from "./qr-scanner";
 import { getProblemReport, startProblemReport } from "./report";
 import { isOwnCode } from "./own-code";
+import {
+    answerSuggestion,
+    canSuggest,
+    claimSuggestion,
+    countMutedSites,
+    resetSuggestions,
+} from "./report-suggestions";
+
+/** Hostname of the page a content-script message came from */
+const senderHostname = (sender: Browser.Runtime.MessageSender): string => {
+    try {
+        return new URL(sender.url ?? sender.tab?.url ?? "").hostname;
+    } catch {
+        return "";
+    }
+};
 
 const SYNC_ALARM_NAME = "ente-auth-sync";
 
@@ -549,8 +565,32 @@ const handleMessage = async (
 
         case "REPORT_DETECTION_PROBLEM": {
             // From a content-script prompt offering to report a field Duckey
-            // missed, picked wrongly, or kept filling
+            // missed, picked wrongly, or kept filling. Once reported, the
+            // site isn't asked again.
+            await answerSuggestion(senderHostname(sender), "reported");
             await startProblemReport(sender.tab, message.source, sender.frameId);
+            return { success: true };
+        }
+
+        case "CAN_SUGGEST_REPORT": {
+            return { success: true, data: { allowed: await canSuggest(senderHostname(sender)) } };
+        }
+
+        case "CLAIM_REPORT_SUGGESTION": {
+            return { success: true, data: { allowed: await claimSuggestion(senderHostname(sender)) } };
+        }
+
+        case "ANSWER_REPORT_SUGGESTION": {
+            await answerSuggestion(senderHostname(sender), message.answer);
+            return { success: true };
+        }
+
+        case "GET_REPORT_SUGGESTION_STATS": {
+            return { success: true, data: { mutedSites: await countMutedSites() } };
+        }
+
+        case "RESET_REPORT_SUGGESTIONS": {
+            await resetSuggestions();
             return { success: true };
         }
 

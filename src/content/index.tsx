@@ -6,6 +6,7 @@ import type Browser from "webextension-polyfill";
 import { browser, sendMessage } from "@shared/browser";
 import type { AuthState, DomainMatch, ExtensionSettings, MFAFieldDetection } from "@shared/types";
 import { canAutoFill, fillCode, recordAutoFill } from "./autofill";
+import { claimReportSuggestion } from "./reportSuggestions";
 import { getBestMFAField } from "./detector";
 import { collectPageReport } from "./report";
 import { getSuggestionTarget, noteDuckeyFill, startMissDetection } from "./missDetector";
@@ -153,6 +154,18 @@ const renderIconForCurrentDetection = async (openPicker = false): Promise<void> 
             : currentDetection.element;
         const placement: "inside" | "outside" = isSplit ? "outside" : "inside";
 
+        // Auto-fill would fill a lone match but is paused (the field keeps
+        // getting refilled): offer to report it, if this site may be asked
+        const autoFillPaused = !canAutoFill();
+        const suggestPausedReport =
+            autoFillPaused &&
+            !openOnShow &&
+            isAuthenticated &&
+            autoFillSingleMatch &&
+            matches.length === 1 &&
+            (await claimReportSuggestion());
+        if (seq !== renderSeq || !currentDetection) return;
+
         showPopup(matches, timeOffset, (otp: string, userInitiated = true) => {
             if (!currentDetection) return;
             // Cap automatic fills so a wrongly detected field isn't refilled forever
@@ -161,8 +174,8 @@ const renderIconForCurrentDetection = async (openPicker = false): Promise<void> 
         }, anchorElement, autoFillSingleMatch, authState, {
             placement,
             openOnShow,
-            autoFillPaused: !canAutoFill(),
-            suggestReports: settings?.suggestDetectionReports ?? true,
+            autoFillPaused,
+            suggestPausedReport,
         });
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);

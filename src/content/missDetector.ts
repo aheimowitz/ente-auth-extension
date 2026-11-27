@@ -12,14 +12,15 @@
  *
  * Only real user input counts (event.isTrusted), so Duckey's own fills never
  * trigger it. Nothing is sent anywhere: the user is shown a prompt and decides
- * whether to open the report page. Each prompt shows at most once per site per
- * tab, and the "Suggest reporting detection problems" setting turns it off.
+ * whether to open the report page. The background limits how often prompts
+ * appear (per site and per day; see background/report-suggestions.ts), and the
+ * "Suggest reporting detection problems" setting turns them off.
  */
 import { sendMessage } from "@shared/browser";
-import type { DetectionProblem, ExtensionSettings, MFAFieldDetection } from "@shared/types";
+import type { DetectionProblem, MFAFieldDetection } from "@shared/types";
 import { diagnoseField } from "./detector";
 import { showReportSuggestion } from "./popup";
-import { isSuggestionDismissed } from "./reportSuggestions";
+import { canSuggestReport, claimReportSuggestion } from "./reportSuggestions";
 
 /** How long after Duckey fills a field a non-code entry there counts as "wrong field" */
 const WRONG_FIELD_WINDOW_MS = 2 * 60_000;
@@ -51,18 +52,8 @@ const isDetectedField = (input: HTMLInputElement): boolean => {
     return !!detection && (detection.element === input || !!detection.splitInputs?.includes(input));
 };
 
-const suggestionsEnabled = async (): Promise<boolean> => {
-    try {
-        const res = await sendMessage<{ success: boolean; data?: ExtensionSettings }>({ type: "GET_SETTINGS" });
-        return res?.data?.suggestDetectionReports ?? true;
-    } catch {
-        return false;
-    }
-};
-
 const suggest = async (input: HTMLInputElement, problem: DetectionProblem): Promise<void> => {
-    if (isSuggestionDismissed(problem) || !input.isConnected) return;
-    if (!(await suggestionsEnabled())) return;
+    if (!input.isConnected || !(await claimReportSuggestion())) return;
     suggestionTarget = input;
     showReportSuggestion(input, problem);
 };
@@ -98,12 +89,12 @@ const looksLikeCodeField = (input: HTMLInputElement): boolean => {
 };
 
 const checkForMissedField = async (input: HTMLInputElement, value: string, pasted: boolean): Promise<void> => {
-    if (isDetectedField(input) || isSuggestionDismissed("missed-field")) return;
+    if (isDetectedField(input)) return;
     const code = asCode(value);
     if (!code || lastChecked.get(input) === code) return;
     lastChecked.set(input, code);
-    // With the setting off, don't check codes at all
-    if (!(await suggestionsEnabled())) return;
+    // Don't check codes at all when the setting is off or this site can't be asked
+    if (!(await canSuggestReport())) return;
 
     const matched = await matchesOwnCode(code);
     // Unlocked: only the user's own codes count; any other code is likely

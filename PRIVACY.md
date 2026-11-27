@@ -24,6 +24,7 @@ This policy covers Duckey ("the extension") for Chrome, Edge and Firefox. The ex
 | Settings and custom domain mappings | To configure the extension | Stored only in extension storage |
 | Web page content (current tab) | To find 2FA input fields and suggest the right code for the site | Read in the page only; never sent anywhere |
 | 6–8 digit values you type or paste into page fields | Only with "Suggest reporting detection problems" on (the default): to notice when you entered one of your codes in a field Duckey missed, and offer to report it | Compared with your codes inside the extension, then discarded; never stored or sent anywhere. A report is only filed if you choose to, and it never includes the value |
+| Sites where Duckey offered a report, and your answer | So it doesn't ask again too soon, or ever on sites you report or say not to ask about | Stored only in extension storage. Cleared on logout, or with Reset in Settings |
 | Screenshot of the visible tab | Only when you click "Scan QR code", to read the QR code | Processed in the browser and then discarded; never sent anywhere |
 
 ## Local storage

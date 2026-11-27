@@ -11,7 +11,7 @@ import { ACCENT_COLORS, getResolvedAccentColor, getResolvedTheme } from "@shared
 import { renderDuckeyIconDataUrl } from "@shared/icon";
 import { browser, sendMessage } from "@shared/browser";
 import type { AuthState, Code, DetectionProblem, DomainMatch } from "@shared/types";
-import { dismissSuggestion, isSuggestionDismissed } from "./reportSuggestions";
+import { answerReportSuggestion } from "./reportSuggestions";
 
 type ResolvedTheme = "light" | "dark";
 
@@ -771,9 +771,12 @@ const SUGGESTION_TEXT: Record<DetectionProblem, { title: string; message: string
     },
 };
 
+/** How a suggestion card was closed */
+type SuggestionClose = "reported" | "not-now" | "never";
+
 interface ReportSuggestionCardProps {
     problem: DetectionProblem;
-    onClose: () => void;
+    onClose: (how: SuggestionClose) => void;
     theme: ResolvedTheme;
     accentColor: string;
     /** In its own host next to a field, rather than under the autofill icon */
@@ -803,7 +806,7 @@ const ReportSuggestionCard: React.FC<ReportSuggestionCardProps> = ({
             // retargeted to its host; those aren't outside clicks
             const host = (prompt.getRootNode() as ShadowRoot).host;
             if (e.target !== host && !prompt.contains(e.target as Node)) {
-                onClose();
+                onClose("not-now");
             }
         };
         const timeoutId = setTimeout(() => {
@@ -862,6 +865,16 @@ const ReportSuggestionCard: React.FC<ReportSuggestionCardProps> = ({
             borderRadius: "6px",
             cursor: "pointer",
         },
+        link: {
+            alignSelf: "flex-start",
+            padding: 0,
+            fontSize: "12px",
+            color: colors.textMuted,
+            backgroundColor: "transparent",
+            border: "none",
+            textDecoration: "underline",
+            cursor: "pointer",
+        },
         secondary: {
             padding: "8px 12px",
             fontSize: "13px",
@@ -886,7 +899,7 @@ const ReportSuggestionCard: React.FC<ReportSuggestionCardProps> = ({
                         e.preventDefault();
                         e.stopPropagation();
                         sendMessage({ type: "REPORT_DETECTION_PROBLEM", source: problem }).catch(() => {});
-                        onClose();
+                        onClose("reported");
                     }}
                 >
                     Report this field
@@ -897,12 +910,23 @@ const ReportSuggestionCard: React.FC<ReportSuggestionCardProps> = ({
                     onMouseDown={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        onClose();
+                        onClose("not-now");
                     }}
                 >
                     Not now
                 </button>
             </div>
+            <button
+                type="button"
+                style={styles.link}
+                onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onClose("never");
+                }}
+            >
+                Don't ask on this site
+            </button>
         </div>
     );
 };
@@ -917,7 +941,8 @@ interface AutofillIconProps {
     authState?: AuthState;
     openOnShow?: boolean;
     autoFillPaused?: boolean;
-    suggestReports?: boolean;
+    /** Show the "Auto-fill paused" report suggestion (already claimed by the caller) */
+    suggestPausedReport?: boolean;
 }
 
 const AutofillIcon: React.FC<AutofillIconProps> = ({
@@ -930,7 +955,7 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
     authState,
     openOnShow = false,
     autoFillPaused = false,
-    suggestReports = true,
+    suggestPausedReport = false,
 }) => {
     // Treat unknown auth state as authenticated so we never block on a missing field.
     const isAuthenticated = !authState || (authState.isLoggedIn && authState.isUnlocked);
@@ -950,20 +975,12 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
     const [isOpen, setIsOpen] = useState(() =>
         openOnShow ? !willAutoFill : shouldAutoOpenDropdown
     );
-    // Auto-fill would have filled a lone match but is paused: suggest a report
-    const [showPausedPrompt, setShowPausedPrompt] = useState(
-        () =>
-            !openOnShow &&
-            isAuthenticated &&
-            autoFillSingleMatch &&
-            autoFillPaused &&
-            suggestReports &&
-            matches.length === 1 &&
-            !isSuggestionDismissed("auto-fill-loop")
-    );
-    const closePausedPrompt = useCallback(() => {
-        // Any answer (report, not now, click away) counts, so it isn't shown again
-        dismissSuggestion("auto-fill-loop");
+    // Auto-fill would have filled a lone match but is paused, and the caller
+    // got the go-ahead to suggest a report
+    const [showPausedPrompt, setShowPausedPrompt] = useState(suggestPausedReport);
+    const closePausedPrompt = useCallback((how: SuggestionClose = "not-now") => {
+        // "Report" is recorded by the report message itself
+        if (how !== "reported") answerReportSuggestion(how);
         setShowPausedPrompt(false);
     }, []);
     const [theme, setTheme] = useState<ResolvedTheme>("dark");
@@ -999,7 +1016,7 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
     const handleIconClick = (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
-        if (showPausedPrompt) closePausedPrompt();
+        if (showPausedPrompt) closePausedPrompt("not-now");
         setIsOpen(!isOpen);
     };
 
@@ -1150,12 +1167,12 @@ export const showPopup = (
         placement = "inside",
         openOnShow = false,
         autoFillPaused = false,
-        suggestReports = true,
+        suggestPausedReport = false,
     }: {
         placement?: "inside" | "outside";
         openOnShow?: boolean;
         autoFillPaused?: boolean;
-        suggestReports?: boolean;
+        suggestPausedReport?: boolean;
     } = {}
 ): void => {
     // Remove existing icon
@@ -1190,7 +1207,7 @@ export const showPopup = (
             authState={authState}
             openOnShow={openOnShow}
             autoFillPaused={autoFillPaused}
-            suggestReports={suggestReports}
+            suggestPausedReport={suggestPausedReport}
         />
     );
 
@@ -1243,7 +1260,7 @@ export const isPopupVisible = (): boolean => {
 let suggestionHost: ShadowHostWithCleanup | null = null;
 let suggestionRoot: Root | null = null;
 
-const StandaloneSuggestion: React.FC<{ problem: DetectionProblem; onClose: () => void }> = ({
+const StandaloneSuggestion: React.FC<{ problem: DetectionProblem; onClose: (how: SuggestionClose) => void }> = ({
     problem,
     onClose,
 }) => {
@@ -1291,8 +1308,9 @@ export const showReportSuggestion = (anchor: HTMLElement, problem: DetectionProb
     const wrapper = document.createElement("div");
     shadow.appendChild(wrapper);
 
-    const close = () => {
-        dismissSuggestion(problem);
+    const close = (how: SuggestionClose) => {
+        // "Report" is recorded by the report message itself
+        if (how !== "reported") answerReportSuggestion(how);
         hideReportSuggestion();
     };
     suggestionRoot = createRoot(wrapper);

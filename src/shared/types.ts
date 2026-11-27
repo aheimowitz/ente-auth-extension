@@ -190,7 +190,13 @@ export type ExtensionMessage =
     | { type: "CLAIM_WELCOME_GUIDE" }
     | { type: "GET_PROBLEM_REPORT" }
     | { type: "REPORT_DETECTION_PROBLEM"; source: DetectionProblem }
-    | { type: "IS_OWN_CODE"; value: string };
+    | { type: "IS_OWN_CODE"; value: string }
+    // Report suggestions; the site is taken from the sending tab
+    | { type: "CAN_SUGGEST_REPORT" }
+    | { type: "CLAIM_REPORT_SUGGESTION" }
+    | { type: "ANSWER_REPORT_SUGGESTION"; answer: "not-now" | "never" }
+    | { type: "GET_REPORT_SUGGESTION_STATS" }
+    | { type: "RESET_REPORT_SUGGESTIONS" };
 
 /**
  * Response types for extension messages.

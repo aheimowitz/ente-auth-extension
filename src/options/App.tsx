@@ -56,6 +56,19 @@ export const App: React.FC = () => {
     const [builtInSearch, setBuiltInSearch] = useState("");
     const [expandedBuiltIn, setExpandedBuiltIn] = useState<string | null>(null);
 
+    // Sites where "Suggest reporting detection problems" won't ask again
+    const [mutedReportSites, setMutedReportSites] = useState(0);
+    useEffect(() => {
+        sendMessage<{ success: boolean; data?: { mutedSites: number } }>({ type: "GET_REPORT_SUGGESTION_STATS" })
+            .then((res) => setMutedReportSites(res?.data?.mutedSites ?? 0))
+            .catch(() => {});
+    }, []);
+    const resetReportSuggestions = () => {
+        sendMessage({ type: "RESET_REPORT_SUGGESTIONS" })
+            .then(() => setMutedReportSites(0))
+            .catch(() => {});
+    };
+
     // Load settings, auth state, and mappings on mount
     useEffect(() => {
         const loadData = async () => {
@@ -388,7 +401,17 @@ export const App: React.FC = () => {
                             <p>
                                 When Duckey seems to miss a code field or pick the wrong one, offer to report it.
                                 Duckey checks this on your device and sends nothing unless you choose to report.
+                                It asks at most 3 times a day, and once you answer it waits a week before asking
+                                on that site again (or never, after you report or choose "Don't ask on this site").
                             </p>
+                            {mutedReportSites > 0 && (
+                                <p className="pin-status-row" style={{ marginTop: "8px" }}>
+                                    Not asking on {mutedReportSites} {mutedReportSites === 1 ? "site" : "sites"}.
+                                    <button className="secondary-button" onClick={resetReportSuggestions}>
+                                        Reset
+                                    </button>
+                                </p>
+                            )}
                         </div>
                         <label className="toggle">
                             <input
