@@ -10,8 +10,8 @@ import { prettyFormatCode } from "@shared/code";
 import { ACCENT_COLORS, getResolvedAccentColor, getResolvedTheme } from "@shared/useTheme";
 import { renderDuckeyIconDataUrl } from "@shared/icon";
 import { browser, sendMessage } from "@shared/browser";
-import type { AuthState, Code, DomainMatch } from "@shared/types";
-import { dismissReportPrompt, isReportPromptDismissed } from "./autofill";
+import type { AuthState, Code, DetectionProblem, DomainMatch } from "@shared/types";
+import { answerReportSuggestion } from "./reportSuggestions";
 
 type ResolvedTheme = "light" | "dark";
 
@@ -753,18 +753,48 @@ const AuthPromptDropdown: React.FC<AuthPromptDropdownProps> = ({
     );
 };
 
-interface AutoFillPausedPromptProps {
-    onClose: () => void;
+const SUGGESTION_TEXT: Record<DetectionProblem, { title: string; message: string }> = {
+    "auto-fill-loop": {
+        title: "Auto-fill paused",
+        message:
+            "Duckey filled this field several times in a row, so it may be the wrong field. Click the icon to fill a code yourself, or report the field so detection can be fixed.",
+    },
+    "missed-field": {
+        title: "Did Duckey miss this field?",
+        message:
+            "You entered a code here, but Duckey didn't recognize this as a code field. If it's a code from your authenticator, reporting the field helps fix detection.",
+    },
+    "wrong-field": {
+        title: "Wrong field?",
+        message:
+            "Duckey filled a code here, but this field looks like it wanted something else. Reporting it helps fix detection.",
+    },
+};
+
+/** How a suggestion card was closed */
+type SuggestionClose = "reported" | "not-now" | "never";
+
+interface ReportSuggestionCardProps {
+    problem: DetectionProblem;
+    onClose: (how: SuggestionClose) => void;
     theme: ResolvedTheme;
     accentColor: string;
+    /** In its own host next to a field, rather than under the autofill icon */
+    standalone?: boolean;
 }
 
 /**
- * Shown once auto-fill is paused on a site after repeated automatic fills,
- * which usually means Duckey picked the wrong field. Offers to open the
- * "Report a problem" page for the detected field.
+ * Offers to open the "Report a problem" page when Duckey notices it probably
+ * missed a field, picked the wrong one, or kept filling one. Reporting only
+ * opens the report page for the user to review; nothing is sent from here.
  */
-const AutoFillPausedPrompt: React.FC<AutoFillPausedPromptProps> = ({ onClose, theme, accentColor }) => {
+const ReportSuggestionCard: React.FC<ReportSuggestionCardProps> = ({
+    problem,
+    onClose,
+    theme,
+    accentColor,
+    standalone = false,
+}) => {
     const promptRef = useRef<HTMLDivElement>(null);
 
     // Close on outside click
@@ -776,7 +806,7 @@ const AutoFillPausedPrompt: React.FC<AutoFillPausedPromptProps> = ({ onClose, th
             // retargeted to its host; those aren't outside clicks
             const host = (prompt.getRootNode() as ShadowRoot).host;
             if (e.target !== host && !prompt.contains(e.target as Node)) {
-                onClose();
+                onClose("not-now");
             }
         };
         const timeoutId = setTimeout(() => {
@@ -792,10 +822,10 @@ const AutoFillPausedPrompt: React.FC<AutoFillPausedPromptProps> = ({ onClose, th
 
     const styles: Record<string, React.CSSProperties> = {
         prompt: {
-            position: "absolute",
-            top: "100%",
-            right: 0,
-            marginTop: "4px",
+            ...(standalone
+                ? { position: "relative" }
+                : { position: "absolute", top: "100%", right: 0, marginTop: "4px" }),
+            boxSizing: "border-box",
             width: "280px",
             padding: "14px 16px",
             display: "flex",
@@ -835,6 +865,16 @@ const AutoFillPausedPrompt: React.FC<AutoFillPausedPromptProps> = ({ onClose, th
             borderRadius: "6px",
             cursor: "pointer",
         },
+        link: {
+            alignSelf: "flex-start",
+            padding: 0,
+            fontSize: "12px",
+            color: colors.textMuted,
+            backgroundColor: "transparent",
+            border: "none",
+            textDecoration: "underline",
+            cursor: "pointer",
+        },
         secondary: {
             padding: "8px 12px",
             fontSize: "13px",
@@ -849,11 +889,8 @@ const AutoFillPausedPrompt: React.FC<AutoFillPausedPromptProps> = ({ onClose, th
 
     return (
         <div ref={promptRef} style={styles.prompt}>
-            <p style={styles.title}>Auto-fill paused</p>
-            <p style={styles.message}>
-                Duckey filled this field several times in a row, so it may be the wrong field. Click the
-                icon to fill a code yourself, or report the field so detection can be fixed.
-            </p>
+            <p style={styles.title}>{SUGGESTION_TEXT[problem].title}</p>
+            <p style={styles.message}>{SUGGESTION_TEXT[problem].message}</p>
             <div style={styles.actions}>
                 <button
                     type="button"
@@ -861,8 +898,8 @@ const AutoFillPausedPrompt: React.FC<AutoFillPausedPromptProps> = ({ onClose, th
                     onMouseDown={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        sendMessage({ type: "REPORT_AUTO_FILL_LOOP" }).catch(() => {});
-                        onClose();
+                        sendMessage({ type: "REPORT_DETECTION_PROBLEM", source: problem }).catch(() => {});
+                        onClose("reported");
                     }}
                 >
                     Report this field
@@ -873,12 +910,23 @@ const AutoFillPausedPrompt: React.FC<AutoFillPausedPromptProps> = ({ onClose, th
                     onMouseDown={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        onClose();
+                        onClose("not-now");
                     }}
                 >
                     Not now
                 </button>
             </div>
+            <button
+                type="button"
+                style={styles.link}
+                onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onClose("never");
+                }}
+            >
+                Don't ask on this site
+            </button>
         </div>
     );
 };
@@ -893,6 +941,8 @@ interface AutofillIconProps {
     authState?: AuthState;
     openOnShow?: boolean;
     autoFillPaused?: boolean;
+    /** Show the "Auto-fill paused" report suggestion (already claimed by the caller) */
+    suggestPausedReport?: boolean;
 }
 
 const AutofillIcon: React.FC<AutofillIconProps> = ({
@@ -905,6 +955,7 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
     authState,
     openOnShow = false,
     autoFillPaused = false,
+    suggestPausedReport = false,
 }) => {
     // Treat unknown auth state as authenticated so we never block on a missing field.
     const isAuthenticated = !authState || (authState.isLoggedIn && authState.isUnlocked);
@@ -924,19 +975,12 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
     const [isOpen, setIsOpen] = useState(() =>
         openOnShow ? !willAutoFill : shouldAutoOpenDropdown
     );
-    // Auto-fill would have filled a lone match but is paused: suggest a report
-    const [showPausedPrompt, setShowPausedPrompt] = useState(
-        () =>
-            !openOnShow &&
-            isAuthenticated &&
-            autoFillSingleMatch &&
-            autoFillPaused &&
-            matches.length === 1 &&
-            !isReportPromptDismissed()
-    );
-    const closePausedPrompt = useCallback(() => {
-        // Any answer (report, not now, click away) counts, so it isn't shown again
-        dismissReportPrompt();
+    // Auto-fill would have filled a lone match but is paused, and the caller
+    // got the go-ahead to suggest a report
+    const [showPausedPrompt, setShowPausedPrompt] = useState(suggestPausedReport);
+    const closePausedPrompt = useCallback((how: SuggestionClose = "not-now") => {
+        // "Report" is recorded by the report message itself
+        if (how !== "reported") answerReportSuggestion(how);
         setShowPausedPrompt(false);
     }, []);
     const [theme, setTheme] = useState<ResolvedTheme>("dark");
@@ -972,7 +1016,7 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
     const handleIconClick = (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
-        if (showPausedPrompt) closePausedPrompt();
+        if (showPausedPrompt) closePausedPrompt("not-now");
         setIsOpen(!isOpen);
     };
 
@@ -1051,7 +1095,12 @@ const AutofillIcon: React.FC<AutofillIconProps> = ({
                 />
             )}
             {showPausedPrompt && !isOpen && (
-                <AutoFillPausedPrompt onClose={closePausedPrompt} theme={theme} accentColor={accentColor} />
+                <ReportSuggestionCard
+                    problem="auto-fill-loop"
+                    onClose={closePausedPrompt}
+                    theme={theme}
+                    accentColor={accentColor}
+                />
             )}
             {isOpen && !isAuthenticated && (
                 <AuthPromptDropdown
@@ -1114,9 +1163,17 @@ export const showPopup = (
     inputElement?: HTMLInputElement,
     autoFillSingleMatch = true,
     authState?: AuthState,
-    placement: "inside" | "outside" = "inside",
-    openOnShow = false,
-    autoFillPaused = false
+    {
+        placement = "inside",
+        openOnShow = false,
+        autoFillPaused = false,
+        suggestPausedReport = false,
+    }: {
+        placement?: "inside" | "outside";
+        openOnShow?: boolean;
+        autoFillPaused?: boolean;
+        suggestPausedReport?: boolean;
+    } = {}
 ): void => {
     // Remove existing icon
     hidePopup();
@@ -1150,6 +1207,7 @@ export const showPopup = (
             authState={authState}
             openOnShow={openOnShow}
             autoFillPaused={autoFillPaused}
+            suggestPausedReport={suggestPausedReport}
         />
     );
 
@@ -1196,4 +1254,85 @@ export const hidePopup = (): void => {
  */
 export const isPopupVisible = (): boolean => {
     return shadowHost !== null;
+};
+
+// The standalone report suggestion, shown next to a field Duckey didn't attach to
+let suggestionHost: ShadowHostWithCleanup | null = null;
+let suggestionRoot: Root | null = null;
+
+const StandaloneSuggestion: React.FC<{ problem: DetectionProblem; onClose: (how: SuggestionClose) => void }> = ({
+    problem,
+    onClose,
+}) => {
+    const [theme, setTheme] = useState<ResolvedTheme | null>(null);
+    const [accentColor, setAccentColor] = useState(ACCENT_COLORS.duckey);
+    useEffect(() => {
+        getResolvedAccentColor().then(setAccentColor);
+        getResolvedTheme().then(setTheme);
+    }, []);
+    // Wait for the theme so the card doesn't flash in the wrong colors
+    if (!theme) return null;
+    return (
+        <ReportSuggestionCard
+            problem={problem}
+            onClose={onClose}
+            theme={theme}
+            accentColor={accentColor}
+            standalone
+        />
+    );
+};
+
+const positionSuggestion = (anchor: HTMLElement): void => {
+    if (!suggestionHost) return;
+    const rect = anchor.getBoundingClientRect();
+    const cardWidth = 280;
+    const gutter = 8;
+    // Below the field, left-aligned, kept inside the viewport horizontally
+    const left = Math.max(gutter, Math.min(rect.left, document.documentElement.clientWidth - cardWidth - gutter));
+    suggestionHost.style.top = `${rect.bottom + window.scrollY + 6}px`;
+    suggestionHost.style.left = `${left + window.scrollX}px`;
+};
+
+/**
+ * Show a report suggestion under a field. Marks the suggestion dismissed for
+ * this site once the user answers it in any way.
+ */
+export const showReportSuggestion = (anchor: HTMLElement, problem: DetectionProblem): void => {
+    hideReportSuggestion();
+
+    suggestionHost = document.createElement("div");
+    suggestionHost.id = "ente-auth-suggestion-host";
+    suggestionHost.style.cssText = "all: initial; position: absolute; z-index: 2147483647;";
+    const shadow = suggestionHost.attachShadow({ mode: "closed" });
+    const wrapper = document.createElement("div");
+    shadow.appendChild(wrapper);
+
+    const close = (how: SuggestionClose) => {
+        // "Report" is recorded by the report message itself
+        if (how !== "reported") answerReportSuggestion(how);
+        hideReportSuggestion();
+    };
+    suggestionRoot = createRoot(wrapper);
+    suggestionRoot.render(<StandaloneSuggestion problem={problem} onClose={close} />);
+    document.body.appendChild(suggestionHost);
+
+    positionSuggestion(anchor);
+    const reposition = () => positionSuggestion(anchor);
+    window.addEventListener("scroll", reposition, true);
+    window.addEventListener("resize", reposition);
+    suggestionHost._cleanup = () => {
+        window.removeEventListener("scroll", reposition, true);
+        window.removeEventListener("resize", reposition);
+    };
+};
+
+export const hideReportSuggestion = (): void => {
+    suggestionHost?._cleanup?.();
+    // Unmount after the current event: closing is triggered from inside the card
+    const root = suggestionRoot;
+    suggestionRoot = null;
+    if (root) setTimeout(() => root.unmount(), 0);
+    suggestionHost?.remove();
+    suggestionHost = null;
 };

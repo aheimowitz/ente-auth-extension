@@ -17,6 +17,23 @@ import { settingsStorage, authStorage, customMappingsStorage, welcomeStorage } f
 import { getCodes, getTimeOffset, syncCodes, createCode, updateCode, deleteCode } from "./sync";
 import { scanQRFromPage } from "./qr-scanner";
 import { getProblemReport, startProblemReport } from "./report";
+import { isOwnCode } from "./own-code";
+import {
+    answerSuggestion,
+    canSuggest,
+    claimSuggestion,
+    countMutedSites,
+    resetSuggestions,
+} from "./report-suggestions";
+
+/** Hostname of the page a content-script message came from */
+const senderHostname = (sender: Browser.Runtime.MessageSender): string => {
+    try {
+        return new URL(sender.url ?? sender.tab?.url ?? "").hostname;
+    } catch {
+        return "";
+    }
+};
 
 const SYNC_ALARM_NAME = "ente-auth-sync";
 
@@ -541,10 +558,39 @@ const handleMessage = async (
             }
         }
 
-        case "REPORT_AUTO_FILL_LOOP": {
-            // From the content script's "report this field" prompt; the page
-            // report describes the field Duckey detected and kept filling
-            await startProblemReport(sender.tab, "auto-fill-loop", sender.frameId);
+        case "IS_OWN_CODE": {
+            // Answers only yes / no / can't tell, so secrets stay in the background
+            return { success: true, data: { matched: await isOwnCode(message.value) } };
+        }
+
+        case "REPORT_DETECTION_PROBLEM": {
+            // From a content-script prompt offering to report a field Duckey
+            // missed, picked wrongly, or kept filling. Once reported, the
+            // site isn't asked again.
+            await answerSuggestion(senderHostname(sender), "reported");
+            await startProblemReport(sender.tab, message.source, sender.frameId);
+            return { success: true };
+        }
+
+        case "CAN_SUGGEST_REPORT": {
+            return { success: true, data: { allowed: await canSuggest(senderHostname(sender)) } };
+        }
+
+        case "CLAIM_REPORT_SUGGESTION": {
+            return { success: true, data: { allowed: await claimSuggestion(senderHostname(sender)) } };
+        }
+
+        case "ANSWER_REPORT_SUGGESTION": {
+            await answerSuggestion(senderHostname(sender), message.answer);
+            return { success: true };
+        }
+
+        case "GET_REPORT_SUGGESTION_STATS": {
+            return { success: true, data: { mutedSites: await countMutedSites() } };
+        }
+
+        case "RESET_REPORT_SUGGESTIONS": {
+            await resetSuggestions();
             return { success: true };
         }
 

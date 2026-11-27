@@ -106,31 +106,6 @@ export const recordAutoFill = (): boolean => {
 };
 
 /**
- * SessionStorage key set once the user has answered the "report this field"
- * prompt shown when auto-fill is paused, so it isn't shown again on this site
- * in this tab.
- */
-const REPORT_PROMPT_DISMISSED_KEY = "ente_auth_report_prompt_dismissed";
-let reportPromptDismissedInMemory = false;
-
-export const isReportPromptDismissed = (): boolean => {
-    try {
-        return sessionStorage.getItem(REPORT_PROMPT_DISMISSED_KEY) === "1" || reportPromptDismissedInMemory;
-    } catch {
-        return reportPromptDismissedInMemory;
-    }
-};
-
-export const dismissReportPrompt = (): void => {
-    reportPromptDismissedInMemory = true;
-    try {
-        sessionStorage.setItem(REPORT_PROMPT_DISMISSED_KEY, "1");
-    } catch {
-        // In-memory flag applies
-    }
-};
-
-/**
  * Fill an MFA code into the detected field(s) and optionally submit.
  * Only submits if autoSubmit is explicitly enabled.
  * Non-user-initiated fills are capped at MAX_AUTO_SUBMIT_ATTEMPTS.

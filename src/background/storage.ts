@@ -241,6 +241,7 @@ export const settingsStorage = {
             serverUrl: stored?.serverUrl ?? "",
             accountsUrl: stored?.accountsUrl ?? "",
             sortOrder: stored?.sortOrder ?? "issuer",
+            suggestDetectionReports: stored?.suggestDetectionReports ?? true,
         };
     },
 
