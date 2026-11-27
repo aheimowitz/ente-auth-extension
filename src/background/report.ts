@@ -39,7 +39,7 @@ const collectFromPage = async (
 
 export const startProblemReport = async (
     tab: Browser.Tabs.Tab | undefined,
-    source: "field" | "page",
+    source: ProblemReport["source"],
     frameId: number | undefined
 ): Promise<void> => {
     let page: PageReport | undefined;

@@ -47,6 +47,90 @@ const incrementSubmitAttempts = (): void => {
 };
 
 /**
+ * Automatic (non-user-initiated) fills allowed per site within
+ * AUTO_FILL_WINDOW_MS. When the detector picks the wrong field (e.g. an email
+ * or SMS-code input), the page often clears or re-renders it, which makes the
+ * extension detect it again and refill it forever. Past this limit the icon
+ * still shows, but filling needs a click (issue #76).
+ */
+const MAX_AUTO_FILLS_PER_WINDOW = 2;
+const AUTO_FILL_WINDOW_MS = 60_000;
+
+/**
+ * SessionStorage key for timestamps of recent automatic fills. sessionStorage
+ * is per-origin and per-tab and survives reloads, so attempts that reload the
+ * page are still counted.
+ */
+const AUTO_FILL_ATTEMPTS_KEY = "ente_auth_auto_fill_attempts";
+
+// Used when sessionStorage is unavailable, so the limit still applies until reload
+let inMemoryAutoFills: number[] = [];
+
+const getRecentAutoFills = (): number[] => {
+    const cutoff = Date.now() - AUTO_FILL_WINDOW_MS;
+    let stored: unknown = inMemoryAutoFills;
+    try {
+        const data = sessionStorage.getItem(AUTO_FILL_ATTEMPTS_KEY);
+        if (data) stored = JSON.parse(data);
+    } catch {
+        // Fall back to the in-memory list
+    }
+    if (!Array.isArray(stored)) return [];
+    return stored.filter((t): t is number => typeof t === "number" && t > cutoff);
+};
+
+/**
+ * Whether another automatic fill is allowed on this site right now.
+ */
+export const canAutoFill = (): boolean =>
+    getRecentAutoFills().length < MAX_AUTO_FILLS_PER_WINDOW;
+
+/**
+ * Record an automatic fill. Returns false (and records nothing) if the limit
+ * is already reached, in which case the caller should not fill.
+ */
+export const recordAutoFill = (): boolean => {
+    const recent = getRecentAutoFills();
+    if (recent.length >= MAX_AUTO_FILLS_PER_WINDOW) {
+        console.log("[Ente Auth] Auto-fill paused: too many automatic fills on this site");
+        return false;
+    }
+    const updated = [...recent, Date.now()];
+    inMemoryAutoFills = updated;
+    try {
+        sessionStorage.setItem(AUTO_FILL_ATTEMPTS_KEY, JSON.stringify(updated));
+    } catch {
+        // Storage unavailable (e.g. sandboxed iframe): the in-memory list applies
+    }
+    return true;
+};
+
+/**
+ * SessionStorage key set once the user has answered the "report this field"
+ * prompt shown when auto-fill is paused, so it isn't shown again on this site
+ * in this tab.
+ */
+const REPORT_PROMPT_DISMISSED_KEY = "ente_auth_report_prompt_dismissed";
+let reportPromptDismissedInMemory = false;
+
+export const isReportPromptDismissed = (): boolean => {
+    try {
+        return sessionStorage.getItem(REPORT_PROMPT_DISMISSED_KEY) === "1" || reportPromptDismissedInMemory;
+    } catch {
+        return reportPromptDismissedInMemory;
+    }
+};
+
+export const dismissReportPrompt = (): void => {
+    reportPromptDismissedInMemory = true;
+    try {
+        sessionStorage.setItem(REPORT_PROMPT_DISMISSED_KEY, "1");
+    } catch {
+        // In-memory flag applies
+    }
+};
+
+/**
  * Fill an MFA code into the detected field(s) and optionally submit.
  * Only submits if autoSubmit is explicitly enabled.
  * Non-user-initiated fills are capped at MAX_AUTO_SUBMIT_ATTEMPTS.

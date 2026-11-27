@@ -73,7 +73,12 @@ const fieldTable = (field: ReportedField): string => {
 
 export const formatTitle = (report: ProblemReport): string => {
     const host = report.page?.hostname ?? (report.tabUrl ? safeHost(report.tabUrl) : undefined);
-    const what = report.source === "field" ? "Field not filled" : "Autofill problem";
+    const what =
+        report.source === "field"
+            ? "Field not filled"
+            : report.source === "auto-fill-loop"
+              ? "Wrong field auto-filled"
+              : "Autofill problem";
     return host ? `${what} on ${host}` : what;
 };
 
@@ -95,6 +100,9 @@ export const formatBody = (
     const out: string[] = [];
 
     out.push("### What happened", description.trim() || "_No description given._", "");
+    if (report.source === "auto-fill-loop") {
+        out.push("_Duckey kept auto-filling the detected field on this page and paused auto-fill._", "");
+    }
 
     out.push("### Site");
     out.push(host ? `\`${host}\`` : "_Unknown_");

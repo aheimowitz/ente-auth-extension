@@ -181,7 +181,8 @@ export type ExtensionMessage =
     | { type: "DELETE_CODE"; id: string }
     | { type: "SCAN_QR_FROM_PAGE" }
     | { type: "CLAIM_WELCOME_GUIDE" }
-    | { type: "GET_PROBLEM_REPORT" };
+    | { type: "GET_PROBLEM_REPORT" }
+    | { type: "REPORT_AUTO_FILL_LOOP" };
 
 /**
  * Response types for extension messages.
@@ -399,7 +400,8 @@ export interface PageReport {
  * A full bug report as shown on the report page.
  */
 export interface ProblemReport {
-    source: "field" | "page";
+    /** "auto-fill-loop": started from the prompt shown when auto-fill was paused */
+    source: "field" | "page" | "auto-fill-loop";
     createdAt: number;
     extensionVersion: string;
     userAgent: string;
