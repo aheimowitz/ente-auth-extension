@@ -31,7 +31,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -47,9 +47,9 @@ jobs:
           fi
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
@@ -152,28 +152,42 @@ jobs:
           client-id: ${{ secrets.EDGE_CLIENT_ID }}
           api-key: ${{ secrets.EDGE_API_KEY }}
 
+      # A starting point for the release notes: one line per change, without
+      # commit bodies or trailers (Co-Authored-By etc.). Edit the release on
+      # GitHub afterwards to group and reword changes for users.
       - name: Generate Release Notes
         id: release_notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          REPO: ${{ github.repository }}
         run: |
-          # Get the previous tag
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          RANGE=${PREV_TAG:+$PREV_TAG..}HEAD
 
           DELIMITER=$(openssl rand -hex 16)
-          echo "notes<<${DELIMITER}" >> $GITHUB_OUTPUT
-
-          if [ -n "$PREV_TAG" ]; then
-            # Get the commit message body (skip the subject line, get everything else)
-            git log $PREV_TAG..HEAD --pretty=format:"%b" | head -50 >> $GITHUB_OUTPUT
-          else
-            git log --pretty=format:"%b" -1 | head -50 >> $GITHUB_OUTPUT
-          fi
-
-          echo "" >> $GITHUB_OUTPUT
-          echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...v${{ steps.version.outputs.version }}" >> $GITHUB_OUTPUT
-          echo "${DELIMITER}" >> $GITHUB_OUTPUT
+          {
+            echo "notes<<${DELIMITER}"
+            echo "**Duckey ${VERSION}**"
+            echo ""
+            echo "**Changes**"
+            echo ""
+            # Non-merge commit subjects, leaving out version bumps
+            git log "$RANGE" --no-merges --pretty=format:"- %s" | grep -viE '^- bump version' || true
+            echo ""
+            echo "**Downloads**"
+            echo ""
+            echo "- duckey-chrome-${VERSION}.zip: Chrome and Edge (load unpacked)"
+            echo "- duckey-firefox-${VERSION}.zip: Firefox (unsigned; install from Firefox Add-ons for a permanent install)"
+            echo "- duckey-source-${VERSION}.zip: source code"
+            if [ -n "$PREV_TAG" ]; then
+              echo ""
+              echo "Full Changelog: https://github.com/${REPO}/compare/${PREV_TAG}...v${VERSION}"
+            fi
+            echo "${DELIMITER}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           name: v${{ steps.version.outputs.version }}
           tag_name: v${{ steps.version.outputs.version }}
